@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Environment and keys
+.env
+.api_key
+*.key
+*token*
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and benchmark outputs
+test-report.json
+bench-*.json
+eval-*.json
+
+# Lightpanda browser cache
+.cache/ember/
+
+# Package
+*.whl

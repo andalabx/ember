@@ -1,0 +1,52 @@
+[project]
+name = "ember-browser"
+version = "0.1.0"
+description = "Open source, lightweight headless browser for AI agents. pip install ember-browser."
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+authors = [
+    {name = "Anda Usman"},
+    {name = "AndaLabX"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "trafilatura>=2.0.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "httpx>=0.28",
+    "ddgs>=1.0",
+    "typer>=0.15",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.0",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/andalabx/ember"
+Documentation = "https://ember.andalabx.com"
+Source = "https://github.com/andalabx/ember"
+
+[project.scripts]
+ember = "ember.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "psutil>=6"]
+mcp = ["mcp>=1.0"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ember*"]
