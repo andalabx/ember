@@ -11,7 +11,7 @@
 
 **Open source, lightweight headless browser for AI agents.**
 
-[![PyPI](https://img.shields.io/pypi/v/ember-browser)](https://pypi.org/project/ember-browser/)
+[![PyPI](https://badge.fury.io/py/ember-browser.svg)](https://pypi.org/project/ember-browser/)
 [![Python](https://img.shields.io/pypi/pyversions/ember-browser)](https://pypi.org/project/ember-browser/)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
@@ -59,20 +59,23 @@ ember serve                    # start the REST API
 
 `ember` with no arguments opens a persistent session. Commands and a save guide are shown on startup — no need to type `help` first.
 
-```
+<pre>
   ███████╗███╗   ███╗██████╗ ███████╗██████╗
-  ...
+  ██╔════╝████╗ ████║██╔══██╗██╔════╝██╔══██╗
+  █████╗  ██╔████╔██║██████╔╝█████╗  ██████╔╝
+  ██╔══╝  ██║╚██╔╝██║██╔══██╗██╔══╝  ██╔══██╗
+  ███████╗██║ ╚═╝ ██║██████╔╝███████╗██║  ██║
   ╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
 
   v0.1.0  lightweight headless browser for AI agents
 
-  url        <url>              scrape a page to markdown
-  search     <query>            web search
-  crawl      <url>              crawl a whole website
-  map        <url>              discover all URLs on a site
-  interact   <url>              control a browser with natural language
-  extract    <url>              pull structured data with an LLM
-  batch      <urls.txt>         scrape many URLs concurrently
+  url        &lt;url&gt;              scrape a page to markdown
+  search     &lt;query&gt;            web search
+  crawl      &lt;url&gt;              crawl a whole website
+  map        &lt;url&gt;              discover all URLs on a site
+  interact   &lt;url&gt;              control a browser with natural language
+  extract    &lt;url&gt;              pull structured data with an LLM
+  batch      &lt;urls.txt&gt;         scrape many URLs concurrently
 
   ─── saving results ───────────────────────────────────────────
   one result   url example.com -o page.md
@@ -87,7 +90,7 @@ ember/research › search "python asyncio" -n 10
 ember/research › crawl docs.example.com
 ember/research › output clear    # stop auto-saving
 ember › quit
-```
+</pre>
 
 ### One-shot commands
 
