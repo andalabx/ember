@@ -1,124 +1,245 @@
-# ember
+<div align="center">
 
-Open source lightweight headless browser for AI agents.
+<pre>
+  ███████╗███╗   ███╗██████╗ ███████╗██████╗ 
+  ██╔════╝████╗ ████║██╔══██╗██╔════╝██╔══██╗
+  █████╗  ██╔████╔██║██████╔╝█████╗  ██████╔╝
+  ██╔══╝  ██║╚██╔╝██║██╔══██╗██╔══╝  ██╔══██╗
+  ███████╗██║ ╚═╝ ██║██████╔╝███████╗██║  ██║
+  ╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+</pre>
+
+**Open source, lightweight headless browser for AI agents.**
+
+[![PyPI](https://img.shields.io/pypi/v/ember-browser)](https://pypi.org/project/ember-browser/)
+[![Python](https://img.shields.io/pypi/pyversions/ember-browser)](https://pypi.org/project/ember-browser/)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 ```bash
 pip install ember-browser
-
-ember url https://example.com
-ember search "AI agents"
-ember serve
 ```
 
-No Docker is required. No setup is needed. No API key is necessary to start.
+*No Docker. No API key to start.*
+
+</div>
 
 ---
 
-## Why we built it
+## Why ember
 
-We needed our agents to browse the web, but faced some limitations.
+Most web tools for agents ship with Chromium (641 MB) or require Docker just to get started. We needed something an agent could use on a VPS, a laptop, or a Raspberry Pi without thinking about it.
 
-Existing tools either required Docker, needed API keys for basic features, or shipped with a full Chromium browser that was 641 MB and too heavy to run on a normal machine.
+ember runs at ~17 MB idle. It decides whether a page needs a browser — you just pass it a URL.
 
-So we built ember. It does what the heavy tools do but at a fraction of the cost. We optimized for:
+|                     | ember              | Crawl4AI           |
+|---------------------|--------------------|--------------------|
+| Import footprint    | ~54 MB             | 171.8 MB           |
+| Browser binary      | 20 MB (Lightpanda) | 641 MB (Chromium)  |
+| Scrape success rate | ~85% (trafilatura) / ~95%+ (+ Lightpanda) | 90% |
+| Docker required     | No                 | No                 |
+| API key required    | No                 | No                 |
 
-- **Lightness:** ember idles at about 17 MB. You can run it on a laptop, on a VPS alongside other services, or on a Raspberry Pi.
-- **Simplicity:** pip install ember-browser is all you need. No Docker, no config files, no accounts.
-- **Smart defaults:** The tool decides for you whether a page needs a browser. You just give it a URL.
-- **Lazy resources:** Nothing loads until you need it. The browser, the search engine, and the heavy dependencies all wait until they are called.
-- **Free search:** DuckDuckGo is built in. No API key is needed and there are no rate limits.
-- **Open source:** There is no vendor lock in, no surprise bills, and no data leaves your infrastructure.
+---
 
-The result is a browser for agents that actually fits where you are running your agents.
-
-## Install
+## Quick start
 
 ```bash
 pip install ember-browser
+
+ember                          # start the interactive session
+ember url https://example.com  # or run a one-shot command
+ember serve                    # start the REST API
 ```
 
-Browser features like clicking, scrolling, and interacting auto install on first use. You do not have to do anything.
+---
 
-## What your agent can do with it
+## CLI
 
-Read any page:
+### Interactive session
+
+`ember` with no arguments opens a persistent session. Commands and a save guide are shown on startup — no need to type `help` first.
+
+```
+  ███████╗███╗   ███╗██████╗ ███████╗██████╗
+  ...
+  ╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+
+  v0.1.0  lightweight headless browser for AI agents
+
+  url        <url>              scrape a page to markdown
+  search     <query>            web search
+  crawl      <url>              crawl a whole website
+  map        <url>              discover all URLs on a site
+  interact   <url>              control a browser with natural language
+  extract    <url>              pull structured data with an LLM
+  batch      <urls.txt>         scrape many URLs concurrently
+
+  ─── saving results ───────────────────────────────────────────
+  one result   url example.com -o page.md
+  everything   output ./research/  then all results auto-save
+  last result  save page.md        after any command
+
+ember › url andausman.com
+ember › save page.md
+
+ember › output ./research/       # auto-save everything from here
+ember/research › search "python asyncio" -n 10
+ember/research › crawl docs.example.com
+ember/research › output clear    # stop auto-saving
+ember › quit
+```
+
+### One-shot commands
+
+Every command works standalone too:
 
 ```bash
-ember url https://en.wikipedia.org/wiki/Python
+ember url https://example.com                         # scrape a page
+ember search "AI agents python" -n 10                 # web search
+ember crawl https://docs.example.com --max-pages 20   # crawl a site
+ember map https://example.com                         # discover all URLs
+ember interact https://amazon.com \
+  --prompt "find a mechanical keyboard under $100"
+ember extract https://example.com/pricing \
+  --prompt "list all plans and prices as JSON"
 ```
 
-Search the web:
+### Saving results
+
+All commands accept `-o` to save that run:
 
 ```bash
-ember search "AI agents python"
+ember url https://example.com -o page.md
+ember search "python" -o results.json
+ember crawl https://docs.example.com -o ./pages/   # one .md per page
+ember map https://example.com -o urls.txt
+ember extract https://example.com -o data.json
 ```
 
-Crawl a whole site:
+Set a default save directory so you never need `-o`:
 
 ```bash
-ember crawl https://docs.example.com --max-pages 20
+ember config --save-dir ./research/    # persists across sessions
+ember config                           # show current settings
+ember config --save-dir ""             # clear it
 ```
 
-Discover every URL on a site:
+Or use an environment variable for the current shell:
 
 ```bash
-ember map https://example.com
+EMBER_SAVE_DIR=./out ember url https://example.com
 ```
 
-Control a page in plain English:
+In a session, the three ways to save:
+
+```
+ember › url example.com -o page.md     # save just this run
+ember › save page.md                   # save the last result
+ember › output ./research/             # auto-save all results from now on
+```
+
+### Async batch scraping
 
 ```bash
-ember interact https://amazon.com --prompt "search for mechanical keyboard and tell me the first result price"
+# urls.txt — one URL per line, # = comment
+ember batch urls.txt                      # 5 concurrent by default
+ember batch urls.txt -c 20 -o ./pages/   # 20 parallel, save to dir
 ```
 
-Extract structured data with an LLM:
+---
+
+## Python API
+
+```python
+from emb.scrape import scrape_url, scrape_markdown
+from emb.search import search
+from emb.crawl import crawl
+from emb.map import map_url
+
+# Scrape a page → ScrapeResult
+result = scrape_url("https://example.com")
+print(result.markdown)   # full page content as markdown
+print(result.title)      # page title
+print(result.success)    # True / False
+
+# Just the markdown text
+md = scrape_markdown("https://example.com")
+
+# Crawl a site
+result = crawl("https://docs.example.com", max_pages=20, max_depth=3)
+for page in result.pages:
+    print(page.url, len(page.markdown))
+
+# Discover URLs
+result = map_url("https://example.com", max_links=100)
+print(result.links)   # list[str]
+
+# Search the web
+results = search("python asyncio tutorial", limit=5)
+for r in results:
+    print(r.title, r.url)
+
+# Browser interaction with natural language
+from emb.interact import interact
+
+result = interact("https://example.com", prompt="click the login button")
+print(result.content)   # what the agent did / saw
+
+# LLM-powered structured extraction
+from emb.agent import extract
+
+data = extract("https://example.com/pricing", prompt="list all plans and prices")
+print(data)   # dict
+```
+
+### Async
+
+```python
+import asyncio
+from emb.scrape import scrape_url_async
+
+async def main():
+    results = await asyncio.gather(
+        scrape_url_async("https://example.com"),
+        scrape_url_async("https://httpbin.org/get"),
+    )
+    for r in results:
+        print(r.url, r.success)
+
+asyncio.run(main())
+```
+
+---
+
+## REST API
 
 ```bash
-export EMBER_LLM_API_KEY=***
-ember extract https://example.com/pricing --prompt "list all plans and their prices"
-```
+ember serve               # http://127.0.0.1:51251
+ember serve --port 8080   # custom port
 
-Start the API:
-
-```bash
-ember serve
-```
-
-## How it works
-
-Not every page needs a browser. Most are just HTML. Ember knows the difference.
-
-For blogs, news, documentation, and most of the web, it uses trafilatura. That is a text extraction library that gets the content without spinning up a browser. It is fast and has zero memory overhead.
-
-For sites with basic anti bot protection, it uses curl_cffi. That is TLS impersonation at the network level. Still no browser.
-
-For JavaScript heavy pages, SPAs, and interactive content, it uses Lightpanda. That is a real browser engine built for machines not humans in Zig. It downloads the first time you need it and caches itself.
-
-The browser only loads when the page actually needs it. Most requests never get past the first tier.
-
-## Size
-
-- Idle: about 17 MB of RAM
-- Scraping a normal page: about 20 MB of RAM
-- Running a full browser: about 140 MB of RAM
-
-For comparison, Firecrawl needs 4 to 8 GB in Docker. Crawl4AI takes 140 MB or more just to import. We built ember to do more with less.
-
-## For agent frameworks
-
-Start the REST API with ember serve. It listens on port 51251 by default. Change it with `--port`.
-
-```bash
-ember serve
+EMBER_API_KEY=your-secret ember serve   # require auth
 ```
 
 ```bash
-curl -X POST http://localhost:51251/scrape -H "Content-Type: application/json" -d '{"url": "https://example.com"}'
+curl -X POST http://localhost:51251/scrape \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret" \
+  -d '{"url": "https://example.com"}'
+
+curl -X POST http://localhost:51251/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "AI agents", "limit": 5}'
+
+curl -X POST http://localhost:51251/crawl \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://docs.example.com", "max_pages": 10}'
 ```
 
-Endpoints include /scrape, /search, /crawl, /map, /interact, /extract, and /agent.
+Endpoints: `/scrape` `/search` `/crawl` `/map` `/interact` `/extract` `/agent` `/health`
 
-For MCP, add this to your configuration:
+---
+
+## MCP
 
 ```json
 {
@@ -131,27 +252,49 @@ For MCP, add this to your configuration:
 }
 ```
 
-It works with Claude Code, OpenClaw, and anything that speaks MCP.
+Works with Claude Code, Cursor, and any MCP-compatible host.
 
-## Benchmarks
+Available tools: `scrape`, `search_web`, `crawl_site`, `map_site`, `batch_scrape`, `interact_page`, `extract_data`.
 
-We ran ember against Crawl4AI across 29 URLs. The set included docs, news, blogs, ecommerce, tech, and government sites. We used the same machine, same network, and same timeout.
+---
 
-Ember imported at 48.5 MB. Crawl4AI imported at 171.8 MB.
+## How it works
 
-Ember scraped with a 97% success rate. Crawl4AI got 90%. It could not handle Reuters, Amazon, or StackOverflow.
+Not every page needs a browser. ember knows the difference.
 
-Ember browser binary is 20 MB using Lightpanda. Crawl4AI uses Chromium at 641 MB.
+**Tier 1 — trafilatura** handles ~90% of the web: blogs, news, documentation, Wikipedia. Pure HTTP, no browser process, no memory overhead.
 
-We used ember as the browser layer for an agent running the [GAIA](https://huggingface.co/datasets/gaia-benchmark/GAIA) benchmark. Ember successfully retrieved web content, searched for information, and fed results back for every question it was given.
+**Tier 2 — Lightpanda** handles JavaScript-heavy pages, SPAs, and interactive content. It's a real browser engine written in Zig, built for machines rather than humans — 20 MB total. ember downloads and caches it automatically on first use, and only falls back to it when tier 1 produces thin content.
+
+Most requests never reach the browser.
+
+### Memory footprint
+
+| State                  | RAM     |
+|------------------------|---------|
+| Idle                   | ~17 MB  |
+| Scraping a static page | ~20 MB  |
+| Running the browser    | ~140 MB |
+
+Firecrawl needs 4–8 GB in Docker. Crawl4AI imports at 171 MB before scraping anything. ember fits where your agent already runs.
+
+---
 
 ## Environment variables
 
-- **EMBER_LLM_API_KEY** with no default. This is the key for LLM extraction.
-- **EMBER_LLM_BASE_URL** with a default of https://api.openai.com/v1. This is the LLM API endpoint.
-- **EMBER_LLM_MODEL** with a default of gpt-4o-mini. This is the LLM model.
-- **EMBER_LIGHTPANDA_PATH** with a default of lightpanda. This is the path to the browser binary.
+| Variable                  | Default                        | Description |
+|---------------------------|--------------------------------|-------------|
+| `EMBER_SAVE_DIR`          | _(none)_                       | Default directory for saved results. Overrides `ember config --save-dir` for the current shell. |
+| `EMBER_API_KEY`           | _(none)_                       | Enables API key auth on the REST server (`X-API-Key` header). |
+| `EMBER_PORT`              | `51251`                        | Default port for `ember serve`. Overridden by `--port` flag. |
+| `EMBER_INTERACT_PROVIDER` | `openai`                       | LLM provider for `interact` (`openai`, `anthropic`, `ollama`, etc.). |
+| `EMBER_LLM_API_KEY`       | _(none)_                       | API key for LLM-powered extraction. |
+| `EMBER_LLM_BASE_URL`      | `https://api.openai.com/v1`    | LLM API endpoint for extraction. |
+| `EMBER_LLM_MODEL`         | `gpt-4o-mini`                  | Model used by `extract`. |
+| `EMBER_LIGHTPANDA_PATH`   | _(auto)_                       | Path to a custom Lightpanda binary. Skips auto-download if set. |
+
+---
 
 ## License
 
-AGPL-3.0
+[AGPL-3.0](LICENSE) — open source forever.

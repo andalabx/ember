@@ -1,19 +1,21 @@
 """Shared types used across ember modules."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any
 
 
 @dataclass
 class ScrapeResult:
     url: str
-    markdown: str
+    markdown: str = ""
     title: str = ""
     description: str = ""
-    screenshot: Optional[str] = None
-    metadata: dict = field(default_factory=dict)
+    screenshot: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -31,7 +33,7 @@ class CrawlResult:
     pages: list[CrawlPage] = field(default_factory=list)
     total: int = 0
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -46,12 +48,13 @@ class MapResult:
     url: str
     links: list[str] = field(default_factory=list)
     total: int = 0
+    error: str | None = None
 
 
 @dataclass
 class InteractResult:
     url: str
-    content: str
-    screenshot: Optional[str] = None
+    content: str = ""
+    screenshot: str | None = None
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None

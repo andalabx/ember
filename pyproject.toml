@@ -16,9 +16,11 @@ dependencies = [
     "httpx>=0.28",
     "ddgs>=1.0",
     "typer>=0.15",
+    "rich>=13.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.0",
+    "pypdf>=4.0",
 ]
 
 classifiers = [
@@ -30,23 +32,24 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [project.urls]
 Homepage = "https://github.com/andalabx/ember"
-Documentation = "https://ember.andalabx.com"
+Documentation = "https://andalabx.com/ember"
 Source = "https://github.com/andalabx/ember"
 
 [project.scripts]
-ember = "ember.cli:app"
+ember = "emb.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "psutil>=6"]
-mcp = ["mcp>=1.0"]
+dev = ["pytest>=8"]
+mcp = ["fastmcp>=2.0"]
 
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["ember*"]
+include = ["emb*"]

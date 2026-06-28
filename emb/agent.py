@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 
-from ember.scrape import scrape_url
+import httpx
+
+from emb.scrape import scrape_url
+
+_log = logging.getLogger(__name__)
 
 _DEFAULT_API_KEY = os.environ.get("EMBER_LLM_API_KEY", "")
 _DEFAULT_BASE_URL = os.environ.get("EMBER_LLM_BASE_URL", "https://api.openai.com/v1")
 _DEFAULT_MODEL = os.environ.get("EMBER_LLM_MODEL", "gpt-4o-mini")
+_MAX_CONTENT_CHARS = 15_000
 
 
+# Requires EMBER_LLM_API_KEY. Falls back to returning raw markdown when no key is set.
 def extract(
     url: str,
     *,
@@ -20,37 +27,23 @@ def extract(
     model: str = _DEFAULT_MODEL,
     api_key: str = _DEFAULT_API_KEY,
     base_url: str = _DEFAULT_BASE_URL,
+    timeout: int = 60,
+    use_browser: bool | None = None,
 ) -> dict[str, Any]:
-    """Extract structured data from a URL using an LLM.
-
-    Scrapes the page to markdown, then sends it to the LLM with
-    the extraction prompt. Requires EMBER_LLM_API_KEY to be set.
-
-    Args:
-        url: Page to extract from.
-        prompt: What to extract (e.g. "list all pricing plans").
-        model: LLM model name.
-        api_key: API key for the LLM provider.
-        base_url: Base URL for the LLM API.
-
-    Returns:
-        Dictionary with extracted content.
-    """
-    scraped = scrape_url(url)
+    scraped = scrape_url(url, use_browser=use_browser, timeout=timeout)
     if not scraped.success:
         return {"error": scraped.error or "Failed to scrape URL"}
 
     if not api_key:
         return {"markdown": scraped.markdown, "title": scraped.title}
 
-    user_prompt = f"Page: {url}\nTitle: {scraped.title}\n\n{scraped.markdown[:15000]}\n\n"
+    user_prompt = f"Page: {url}\nTitle: {scraped.title}\n\n{scraped.markdown[:_MAX_CONTENT_CHARS]}\n\n"
     if prompt:
         user_prompt += f"Task: {prompt}"
     else:
         user_prompt += "Extract the main structured information."
 
     try:
-        import httpx
         resp = httpx.post(
             f"{base_url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -63,7 +56,7 @@ def extract(
                 "temperature": 0.1,
                 "max_tokens": 4096,
             },
-            timeout=60,
+            timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -73,4 +66,5 @@ def extract(
         except (json.JSONDecodeError, TypeError):
             return {"content": content, "sources": [url]}
     except Exception as e:
-        return {"error": f"LLM extraction failed: {e}"}
+        _log.debug("LLM request error: %s", e)
+        return {"error": "LLM request failed"}

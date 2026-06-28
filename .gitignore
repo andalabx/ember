@@ -25,6 +25,16 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+
 # Test and benchmark outputs
 test-report.json
 bench-*.json
