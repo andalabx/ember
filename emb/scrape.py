@@ -42,7 +42,7 @@ def scrape_url(
         return _scrape_lightpanda(url, timeout)
 
     result = _scrape_trafilatura(url, timeout)
-    if result.success and len(result.markdown.split()) > _MIN_CONTENT_WORDS:
+    if result.success and len(result.markdown.split()) >= _MIN_CONTENT_WORDS:
         return result
 
     try:
@@ -108,7 +108,7 @@ async def scrape_url_async(
     if use_browser is False:
         return result
 
-    if not result.success or len(result.markdown.split()) <= _MIN_CONTENT_WORDS:
+    if not result.success or len(result.markdown.split()) < _MIN_CONTENT_WORDS:
         loop = asyncio.get_running_loop()
         lp = await loop.run_in_executor(None, lambda: _scrape_lightpanda(url, timeout))
         if lp.success and len(lp.markdown.split()) > len(result.markdown.split()):

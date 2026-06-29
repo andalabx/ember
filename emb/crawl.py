@@ -141,7 +141,7 @@ def crawl(
                 continue
 
             result = _scrape_html(page_url, html)
-            if not result.success or len(result.markdown.split()) <= _MIN_CONTENT_WORDS:
+            if not result.success or len(result.markdown.split()) < _MIN_CONTENT_WORDS:
                 lp = _scrape_lightpanda(page_url, timeout)
                 if lp.success:
                     result = lp

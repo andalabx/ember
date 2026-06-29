@@ -13,7 +13,7 @@
 
 [![PyPI](https://badge.fury.io/py/ember-browser.svg)](https://pypi.org/project/ember-browser/)
 [![Python](https://img.shields.io/pypi/pyversions/ember-browser)](https://pypi.org/project/ember-browser/)
-[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ```bash
 pip install ember-browser
@@ -21,29 +21,28 @@ pip install ember-browser
 
 *No Docker. No API key to start.*
 
+![ember demo](https://i.imgur.com/dFkRJYj.gif)
+
 </div>
 
 ---
 
 ## Why ember
 
-Most web tools for agents ship with Chromium (641 MB) or require Docker just to get started. We needed something an agent could use on a VPS, a laptop, or a Raspberry Pi without thinking about it.
+Most web tools for agents ship with Chromium (~281 MB) or require Docker just to get started. We needed something an agent could use on a VPS, a laptop, or a Raspberry Pi without thinking about it.
 
 ember runs at ~17 MB idle. It decides whether a page needs a browser — you just pass it a URL.
 
-|                     | ember              | Crawl4AI           | Firecrawl          | Playwright         |
-|---------------------|--------------------|--------------------|--------------------|--------------------|
-| Import footprint    | ~54 MB             | 171.8 MB           | API only           | ~600 MB            |
-| Browser binary      | 20 MB (Lightpanda) | 641 MB (Chromium)  | —                  | 641 MB (Chromium)  |
-| Scrape success rate | ~85–95%            | ~90%               | ~95%               | ~98%               |
-| Runs locally        | Yes                | Yes                | No (SaaS)          | Yes                |
-| API key required    | No                 | No                 | Yes                | No                 |
-| Cost per page       | Free               | Free               | Credits            | Free               |
-| MCP server          | Yes                | No                 | No                 | No                 |
-| Search built-in     | Yes                | No                 | No                 | No                 |
-| Docker required     | No                 | No                 | No                 | No                 |
-
-Use Playwright if you need full browser automation for every request. Ember is for agents that need lightweight, local, no-config web access.
+|                          | ember                  | Crawl4AI               | Firecrawl OSS          | Playwright             |
+|--------------------------|------------------------|------------------------|------------------------|------------------------|
+| Setup                    | `pip install`          | `pip install`          | Docker + Redis + Node  | `pip` + browser install|
+| Package size             | ~54 MB                 | ~200–350 MB            | Thin client only       | ~47 MB                 |
+| Browser binary           | Lightpanda ~12 MB      | Chromium ~281 MB       | Chromium ~281 MB       | Chromium ~281 MB       |
+| Docker required          | No                     | No                     | Yes                    | No                     |
+| API key required         | No                     | No                     | No                     | No                     |
+| MCP server               | Yes                    | No                     | Yes                    | Yes                    |
+| Search built-in          | Yes                    | No                     | Yes                    | No                     |
+| Zero-infra self-host     | Yes                    | Yes                    | No                     | Yes                    |
 
 ---
 
@@ -51,6 +50,7 @@ Use Playwright if you need full browser automation for every request. Ember is f
 
 ```bash
 pip install ember-browser
+ember version                  # verify install
 
 ember                          # start the interactive session
 ember url https://example.com  # or run a one-shot command
@@ -250,6 +250,8 @@ Endpoints: `/scrape` `/search` `/crawl` `/map` `/interact` `/extract` `/agent` `
 
 ## MCP
 
+Add to your Hermes config, OpenClaw config, Mercury config, or any MCP-compatible host:
+
 ```json
 {
   "mcpServers": {
@@ -261,9 +263,32 @@ Endpoints: `/scrape` `/search` `/crawl` `/map` `/interact` `/extract` `/agent` `
 }
 ```
 
-Works with Claude Code, Cursor, and any MCP-compatible host.
+Works with Hermes, OpenClaw, Mercury, and any MCP-compatible host.
 
 Available tools: `scrape`, `search_web`, `crawl_site`, `map_site`, `batch_scrape`, `interact_page`, `extract_data`.
+
+Once connected, your agent can use ember tools directly in conversation:
+
+```
+User: Summarise the latest posts on Hacker News
+
+Agent: [calls scrape("https://news.ycombinator.com")]
+       → returns full page markdown with titles, scores, links
+
+Agent: Here are today's top stories on Hacker News: ...
+```
+
+```
+User: Find 5 articles about AI agents and scrape each one
+
+Agent: [calls search_web("AI agents 2025", limit=5)]
+       → returns list of {title, url, description}
+
+Agent: [calls batch_scrape(["url1", "url2", ...])]
+       → returns markdown for each page
+
+Agent: Here's a summary across all 5 articles: ...
+```
 
 ---
 
@@ -271,7 +296,7 @@ Available tools: `scrape`, `search_web`, `crawl_site`, `map_site`, `batch_scrape
 
 Not every page needs a browser. ember knows the difference.
 
-**Tier 1 — trafilatura** handles ~90% of the web: blogs, news, documentation, Wikipedia. Pure HTTP, no browser process, no memory overhead.
+**Tier 1 — trafilatura** handles ~89% of the web: blogs, news, documentation, docs sites, GitHub. Pure HTTP, no browser process, no memory overhead.
 
 **Tier 2 — Lightpanda** handles JavaScript-heavy pages, SPAs, and interactive content. It's a real browser engine written in Zig, built for machines rather than humans — 20 MB total. ember downloads and caches it automatically on first use, and only falls back to it when tier 1 produces thin content.
 
@@ -306,4 +331,4 @@ Firecrawl needs 4–8 GB in Docker. Crawl4AI imports at 171 MB before scraping a
 
 ## License
 
-[AGPL-3.0](LICENSE) — open source forever.
+[MIT](LICENSE) — open source forever.
