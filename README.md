@@ -21,9 +21,9 @@ pip install ember-browser
 
 *No Docker. No API key to start.*
 
-![ember demo](https://i.imgur.com/dFkRJYj.gif)
-
 </div>
+
+![ember demo](https://i.imgur.com/dFkRJYj.gif)
 
 ---
 

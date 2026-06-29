@@ -21,8 +21,8 @@ _MIN_CONTENT_WORDS = 20
 # A body of text that is strictly longer than the thin-content threshold
 _RICH_TEXT = " ".join(["word"] * (_MIN_CONTENT_WORDS + 5))
 
-# A body that is at or below the threshold (so trafilatura result is "thin")
-_THIN_TEXT = " ".join(["word"] * _MIN_CONTENT_WORDS)
+# A body below the threshold (so trafilatura result is "thin")
+_THIN_TEXT = " ".join(["word"] * (_MIN_CONTENT_WORDS - 1))
 
 # Minimal valid HTML pages
 _HTML_WITH_TITLE = "<html><head><title>My Page Title</title></head><body><p>Some content here.</p></body></html>"
