@@ -31,13 +31,19 @@ Most web tools for agents ship with Chromium (641 MB) or require Docker just to 
 
 ember runs at ~17 MB idle. It decides whether a page needs a browser — you just pass it a URL.
 
-|                     | ember              | Crawl4AI           |
-|---------------------|--------------------|--------------------|
-| Import footprint    | ~54 MB             | 171.8 MB           |
-| Browser binary      | 20 MB (Lightpanda) | 641 MB (Chromium)  |
-| Scrape success rate | ~85% (trafilatura) / ~95%+ (+ Lightpanda) | 90% |
-| Docker required     | No                 | No                 |
-| API key required    | No                 | No                 |
+|                     | ember              | Crawl4AI           | Firecrawl          | Playwright         |
+|---------------------|--------------------|--------------------|--------------------|--------------------|
+| Import footprint    | ~54 MB             | 171.8 MB           | API only           | ~600 MB            |
+| Browser binary      | 20 MB (Lightpanda) | 641 MB (Chromium)  | —                  | 641 MB (Chromium)  |
+| Scrape success rate | ~85–95%            | ~90%               | ~95%               | ~98%               |
+| Runs locally        | Yes                | Yes                | No (SaaS)          | Yes                |
+| API key required    | No                 | No                 | Yes                | No                 |
+| Cost per page       | Free               | Free               | Credits            | Free               |
+| MCP server          | Yes                | No                 | No                 | No                 |
+| Search built-in     | Yes                | No                 | No                 | No                 |
+| Docker required     | No                 | No                 | No                 | No                 |
+
+Use Playwright if you need full browser automation for every request. Ember is for agents that need lightweight, local, no-config web access.
 
 ---
 
