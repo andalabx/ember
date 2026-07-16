@@ -1,5 +1,3 @@
-"""LLM-powered structured extraction from scraped pages."""
-
 from __future__ import annotations
 
 import json
@@ -19,7 +17,7 @@ _DEFAULT_MODEL = os.environ.get("EMBER_LLM_MODEL", "gpt-4o-mini")
 _MAX_CONTENT_CHARS = 15_000
 
 
-# Requires EMBER_LLM_API_KEY. Falls back to returning raw markdown when no key is set.
+# Extract needs an LLM.
 def extract(
     url: str,
     *,
@@ -35,7 +33,12 @@ def extract(
         return {"error": scraped.error or "Failed to scrape URL"}
 
     if not api_key:
-        return {"markdown": scraped.markdown, "title": scraped.title}
+        return {
+            "error": (
+                "extract() requires EMBER_LLM_API_KEY. "
+                "Use ember url or scrape_url() when you want raw page markdown."
+            )
+        }
 
     user_prompt = f"Page: {url}\nTitle: {scraped.title}\n\n{scraped.markdown[:_MAX_CONTENT_CHARS]}\n\n"
     if prompt:

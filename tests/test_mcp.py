@@ -1,9 +1,3 @@
-"""Unit tests for MCP tool functions in emb.mcp.
-
-Tests run without a real MCP server — each tool is called directly
-with all underlying ember functions mocked.
-"""
-
 from __future__ import annotations
 
 import json
@@ -12,9 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Helpers — pre-built return values
-# ---------------------------------------------------------------------------
+# Helpers
 
 def _ok_scrape(url="https://example.com", markdown="# Page\n\nContent.", title="Page"):
     from emb.types import ScrapeResult
@@ -55,9 +47,7 @@ def _fail_interact(url="https://example.com", error="LLM error"):
     return InteractResult(url=url, success=False, error=error)
 
 
-# ---------------------------------------------------------------------------
-# Access tool functions directly from the module (bypass server machinery)
-# ---------------------------------------------------------------------------
+# Access tool functions directly.
 
 def _get_tools() -> dict:
     import importlib
@@ -75,7 +65,7 @@ def _get_tools() -> dict:
         def run(self, **kw):
             pass
 
-    # Build a minimal fake fastmcp module and inject it
+    # Inject a small fake fastmcp module.
     fake_fastmcp = MagicMock()
     fake_fastmcp.FastMCP = MagicMock(return_value=_CaptureMCP())
 
@@ -83,7 +73,7 @@ def _get_tools() -> dict:
     sys.modules["fastmcp"] = fake_fastmcp
 
     try:
-        # Force a clean reload so the try/except import at the top of mcp.py runs again
+        # Reload so the import guard runs again.
         sys.modules.pop("emb.mcp", None)
         mcp_mod = importlib.import_module("emb.mcp")
         mcp_mod.start_mcp()
@@ -101,9 +91,7 @@ def tools():
     return _get_tools()
 
 
-# ===========================================================================
 # scrape
-# ===========================================================================
 
 class TestMcpScrape:
     def test_returns_markdown(self, tools):
@@ -117,9 +105,7 @@ class TestMcpScrape:
         assert result == ""
 
 
-# ===========================================================================
 # search_web
-# ===========================================================================
 
 class TestMcpSearchWeb:
     def test_returns_formatted_results(self, tools):
@@ -134,9 +120,7 @@ class TestMcpSearchWeb:
         assert "No results" in result
 
 
-# ===========================================================================
 # crawl_site
-# ===========================================================================
 
 class TestMcpCrawlSite:
     def test_returns_page_count_and_content(self, tools):
@@ -158,9 +142,7 @@ class TestMcpCrawlSite:
         assert call_kwargs.get("max_pages") >= 1
 
 
-# ===========================================================================
 # map_site
-# ===========================================================================
 
 class TestMcpMapSite:
     def test_returns_url_list(self, tools):
@@ -170,9 +152,7 @@ class TestMcpMapSite:
         assert "2" in result   # total count
 
 
-# ===========================================================================
 # batch_scrape
-# ===========================================================================
 
 class TestMcpBatchScrape:
     def test_empty_input_returns_no_urls(self, tools):
@@ -222,9 +202,7 @@ class TestMcpBatchScrape:
         assert captured.get("n", 999) <= 20
 
 
-# ===========================================================================
 # interact_page
-# ===========================================================================
 
 class TestMcpInteractPage:
     def test_success_returns_content(self, tools):
@@ -245,9 +223,7 @@ class TestMcpInteractPage:
         assert call_kwargs.get("timeout") <= 300
 
 
-# ===========================================================================
 # extract_data
-# ===========================================================================
 
 class TestMcpExtractData:
     def test_success_returns_json(self, tools):

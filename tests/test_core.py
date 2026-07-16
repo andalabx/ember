@@ -1,18 +1,17 @@
-"""Integration tests for ember core functionality — hit real URLs."""
 import asyncio
 
 from emb.scrape import scrape_url, scrape_markdown, scrape_url_async, scrape_markdown_async
 from emb.search import search
 from emb.types import ScrapeResult, SearchResult, CrawlResult, MapResult
 
-# ── URLs chosen to match what each test actually exercises ──────────
+# URLs
 _CONTENT_URL   = "https://www.iana.org/domains/reserved"   # static page, clear title, ~60 words
 _SIMPLE_URL    = "https://www.iana.org/domains/reserved"   # same: static HTML, no JS needed
-_MAP_URL       = "https://www.iana.org/"                   # IANA homepage — has internal links
+_MAP_URL       = "https://www.iana.org/"                   # Homepage with internal links.
 _CRAWL_URL     = "https://www.iana.org/domains/reserved"   # shallow, well-behaved
 
 
-# ── Scrape ──────────────────────────────────────────────────────────
+# Scrape
 
 def test_scrape_simple():
     result = scrape_url(_CONTENT_URL, timeout=15)
@@ -27,7 +26,7 @@ def test_scrape_markdown_shorthand():
 
 
 def test_scrape_no_browser():
-    # use_browser=False means trafilatura only — suits a plain static HTML page
+    # Plain static page, so trafilatura-only is enough.
     result = scrape_url(_SIMPLE_URL, use_browser=False, timeout=15)
     assert result.success
     assert len(result.markdown.split()) > 20
@@ -47,7 +46,7 @@ def test_scrape_bad_url():
     assert result.error
 
 
-# ── Async scrape ────────────────────────────────────────────────────
+# Async scrape
 
 def test_scrape_async():
     result = asyncio.run(scrape_url_async(_CONTENT_URL, timeout=15))
@@ -71,7 +70,7 @@ def test_scrape_async_concurrent():
     assert all(r.success for r in results)
 
 
-# ── Search ──────────────────────────────────────────────────────────
+# Search
 
 def test_search():
     results = search("python programming", limit=2)
@@ -92,7 +91,7 @@ def test_search_result_type():
     assert isinstance(results[0].title, str)
 
 
-# ── Crawl ───────────────────────────────────────────────────────────
+# Crawl
 
 def test_crawl_basic():
     from emb.crawl import crawl
@@ -110,11 +109,11 @@ def test_crawl_respects_max_pages():
     assert result.total <= 1
 
 
-# ── Map ─────────────────────────────────────────────────────────────
+# Map
 
 def test_map_basic():
     from emb.map import map_url
-    # IANA homepage has many internal links in its navigation
+    # IANA homepage exposes enough internal links for this check.
     result = map_url(_MAP_URL, max_links=10)
     assert isinstance(result, MapResult)
     assert result.total >= 1

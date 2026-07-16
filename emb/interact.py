@@ -1,5 +1,3 @@
-"""Browser interaction via Lightpanda agent. Auto-installs on first use."""
-
 from __future__ import annotations
 
 import os
@@ -14,8 +12,8 @@ _DEFAULT_PROVIDER = os.environ.get("EMBER_INTERACT_PROVIDER", "openai")
 _DEFAULT_API_KEY = os.environ.get("EMBER_LLM_API_KEY", "")
 _DEFAULT_MODEL = os.environ.get("EMBER_LLM_MODEL", "")
 
-# Maps provider name → env var that Lightpanda reads for its API key.
-# None means no key needed (local providers).
+# Provider to API key env var.
+# None means no key is needed.
 _PROVIDER_ENV_VARS: dict[str, str | None] = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
@@ -28,8 +26,8 @@ _PROVIDER_ENV_VARS: dict[str, str | None] = {
 }
 
 
-# Without a prompt, returns page markdown directly (no LLM needed).
-# use_browser=False (or auto on Windows) falls back to trafilatura; prompt is answered via direct LLM call.
+# No prompt returns page markdown.
+# No browser answers from scraped content.
 def interact(
     url: str,
     *,
@@ -46,13 +44,27 @@ def interact(
         return InteractResult(url=url, success=False, error=str(e))
 
     if not prompt:
-        from emb.scrape import scrape_markdown
-        content = scrape_markdown(url, use_browser=True if use_browser else False)
-        return InteractResult(url=url, content=content)
+        from emb.scrape import scrape_url
 
-    # No-browser path: scrape with trafilatura then answer via direct LLM call
+        scraped = scrape_url(url, use_browser=True if use_browser else False, timeout=timeout)
+        if not scraped.success:
+            return InteractResult(url=url, content="", success=False, error=scraped.error)
+        return InteractResult(url=url, content=scraped.markdown)
+
+    # Use scraped content when no browser is used.
     if not use_browser:
-        return _interact_no_browser(url, prompt=prompt, api_key=api_key, timeout=timeout)
+        if provider != "openai":
+            return InteractResult(
+                url=url,
+                content="",
+                success=False,
+                error=(
+                    "The --no-browser interact path only supports an OpenAI-compatible API. "
+                    "Use provider='openai' with EMBER_LLM_API_KEY / EMBER_LLM_BASE_URL, "
+                    "or run with a browser-capable platform."
+                ),
+            )
+        return _interact_no_browser(url, prompt=prompt, api_key=api_key, model=model, timeout=timeout)
 
     if provider not in _PROVIDER_ENV_VARS:
         return InteractResult(
@@ -60,7 +72,7 @@ def interact(
             error=f"Unknown provider {provider!r}. Valid providers: {sorted(_PROVIDER_ENV_VARS)}",
         )
 
-    # Sanitize model: reject values that look like extra CLI flags
+    # Reject model values that look like CLI flags.
     model = model.strip()
     if model and (model.startswith("-") or len(model) > 128):
         return InteractResult(
@@ -87,12 +99,12 @@ def interact(
     except RuntimeError as e:
         return InteractResult(url=url, content="", success=False, error=str(e))
 
-    # Pass the API key via the env var Lightpanda reads for the chosen provider
+    # Set the provider API key for Lightpanda.
     env = os.environ.copy()
     if env_var and effective_key:
         env[env_var] = effective_key
 
-    # Lightpanda agent navigates based on task text; embed the URL there
+    # Put the URL into the task text.
     task = f"Navigate to {url}. {prompt}"
     cmd = [lp, "agent", "--task", task, "--provider", provider]
     if model:
@@ -113,10 +125,16 @@ def interact(
         return InteractResult(url=url, content="", success=False, error=str(e))
 
 
-def _interact_no_browser(url: str, *, prompt: str, api_key: str, timeout: int) -> InteractResult:
+def _interact_no_browser(
+    url: str,
+    *,
+    prompt: str,
+    api_key: str,
+    model: str,
+    timeout: int,
+) -> InteractResult:
     from emb.scrape import scrape_url
     import httpx
-    import json
 
     scraped = scrape_url(url, use_browser=False, timeout=timeout)
     if not scraped.success:
@@ -129,7 +147,7 @@ def _interact_no_browser(url: str, *, prompt: str, api_key: str, timeout: int) -
         )
 
     base_url = os.environ.get("EMBER_LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.environ.get("EMBER_LLM_MODEL", "gpt-4o-mini")
+    chosen_model = model or os.environ.get("EMBER_LLM_MODEL", "gpt-4o-mini")
     content_snippet = scraped.markdown[:15_000]
     user_msg = f"Page: {url}\nTitle: {scraped.title}\n\n{content_snippet}\n\nTask: {prompt}"
 
@@ -138,7 +156,7 @@ def _interact_no_browser(url: str, *, prompt: str, api_key: str, timeout: int) -
             f"{base_url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": model,
+                "model": chosen_model,
                 "messages": [
                     {"role": "system", "content": "Answer the task using the page content provided."},
                     {"role": "user", "content": user_msg},

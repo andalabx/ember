@@ -1,5 +1,3 @@
-"""URL validation to block SSRF and unsafe schemes."""
-
 from __future__ import annotations
 
 import ipaddress
@@ -24,7 +22,7 @@ def _is_blocked(addr_str: str) -> bool:
         addr = ipaddress.ip_address(addr_str)
     except ValueError:
         return False
-    # IPv6-mapped IPv4 (e.g. ::ffff:10.0.0.1) — unwrap to check against IPv4 ranges
+    # Unwrap IPv6-mapped IPv4.
     if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
         addr = addr.ipv4_mapped
     for network in _BLOCKED_NETWORKS:
@@ -32,12 +30,11 @@ def _is_blocked(addr_str: str) -> bool:
             if addr in network:
                 return True
         except TypeError:
-            pass  # address family mismatch — not blocked by this entry
+            pass  # Ignore address family mismatch.
     return False
 
 
-# DNS rebinding can bypass this check — pair with network-level egress controls
-# in high-security deployments.
+# DNS rebinding still needs network egress controls.
 def validate_url(url: str) -> None:
     parsed = urlparse(url)
 

@@ -29,7 +29,18 @@ pytest tests/
 1. Run `pytest tests/` and make sure everything passes
 2. Make sure your changes do not add new dependencies unless absolutely necessary
 3. Keep functions small and focused. ember is built on the principle that less code is better code
-4. Use type hints and docstrings
+4. Use type hints and keep comments short
+
+## Coding standard
+
+- Write secure code first. Validate input, fail safely, and prefer clear guardrails over clever shortcuts.
+- Keep the UX clean. Error messages should tell the user what happened and what to do next.
+- Comments should be short and simple.
+- Use `#` comments only.
+- Avoid docstrings unless a public interface truly needs one.
+- Comment intent, edge cases, or security decisions. Do not narrate obvious code.
+- Avoid long comment blocks, ASCII diagrams, decorative separators, and noisy prose.
+- Keep naming clear and direct. Prefer readability over cleverness.
 
 ## Questions
 

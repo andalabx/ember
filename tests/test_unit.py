@@ -1,9 +1,3 @@
-"""Unit tests for ember core modules — no real network calls or subprocesses.
-
-All external calls are mocked at the call site (i.e. in the module under test,
-not in the module where the function is defined).
-"""
-
 from __future__ import annotations
 
 import subprocess
@@ -11,27 +5,33 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
-
-# Word threshold used by scrape.py to decide whether content is "thin"
+# Word threshold for thin content.
 _MIN_CONTENT_WORDS = 20
 
-# A body of text that is strictly longer than the thin-content threshold
+# Above the thin-content threshold.
 _RICH_TEXT = " ".join(["word"] * (_MIN_CONTENT_WORDS + 5))
 
-# A body below the threshold (so trafilatura result is "thin")
+# Below the thin-content threshold.
 _THIN_TEXT = " ".join(["word"] * (_MIN_CONTENT_WORDS - 1))
 
-# Minimal valid HTML pages
+_CARDY_TEXT = "\n\n".join([
+    "Real-time observability for AI agents.",
+    "Track cost and latency.",
+    "Open source browser for agents.",
+    "Built for automation teams.",
+    "Structured summaries in seconds.",
+    "Generate llms.txt for your site.",
+    "Label AI outputs faster.",
+    "Talk to the lab.",
+])
+
+# Minimal HTML pages
 _HTML_WITH_TITLE = "<html><head><title>My Page Title</title></head><body><p>Some content here.</p></body></html>"
 _HTML_NO_TITLE = "<html><body><p>Some content here.</p></body></html>"
 
 
-# ===========================================================================
 # _scrape_html
-# ===========================================================================
 
 class TestScrapeHtml:
     def test_valid_html_extracts_title(self):
@@ -73,9 +73,7 @@ class TestScrapeHtml:
         assert "trafilatura" in result.error.lower() or "boom" in result.error
 
 
-# ===========================================================================
 # _scrape_trafilatura
-# ===========================================================================
 
 class TestScrapeTrafilatura:
     def test_http_error_marks_failure(self):
@@ -107,9 +105,7 @@ class TestScrapeTrafilatura:
         assert result.error
 
 
-# ===========================================================================
 # _scrape_lightpanda
-# ===========================================================================
 
 class TestScrapeLightpanda:
     def test_ensure_browser_raises_returns_error(self):
@@ -178,9 +174,7 @@ class TestScrapeLightpanda:
         assert result.markdown == "# Heading\n\nSome content."
 
 
-# ===========================================================================
-# scrape_url — auto-detect path
-# ===========================================================================
+# scrape_url auto-detect
 
 class TestScrapeUrlAutoDetect:
     def test_thin_trafilatura_falls_back_to_lightpanda(self):
@@ -229,6 +223,25 @@ class TestScrapeUrlAutoDetect:
         mock_lp.assert_not_called()
         assert result.markdown == _RICH_TEXT
 
+    def test_cardy_homepage_trafilatura_falls_back_to_lightpanda(self):
+        from emb.scrape import scrape_url
+        from emb.types import ScrapeResult
+
+        cardy_result = ScrapeResult(url="https://example.com", markdown=_CARDY_TEXT, success=True)
+        rich_lp_result = ScrapeResult(
+            url="https://example.com",
+            markdown="# Example\n\n" + " ".join(["word"] * 80),
+            success=True,
+        )
+
+        with patch("emb.scrape.validate_url"), \
+             patch("emb.scrape._scrape_trafilatura", return_value=cardy_result), \
+             patch("emb.scrape._scrape_lightpanda", return_value=rich_lp_result) as mock_lp:
+            result = scrape_url("https://example.com")
+
+        mock_lp.assert_called_once()
+        assert result.markdown == rich_lp_result.markdown
+
     def test_use_browser_true_calls_lightpanda_directly(self):
         from emb.scrape import scrape_url
         from emb.types import ScrapeResult
@@ -256,9 +269,7 @@ class TestScrapeUrlAutoDetect:
         assert "blocked" in result.error
 
 
-# ===========================================================================
 # scrape_url_async
-# ===========================================================================
 
 class TestScrapeUrlAsync:
     def test_non_200_status_returns_failure(self):
@@ -422,20 +433,81 @@ class TestScrapeUrlAsync:
         assert result.success is True
         assert result.markdown == _RICH_TEXT
 
+    def test_auto_detect_cardy_homepage_falls_back_to_lightpanda(self):
+        import asyncio
+        from emb.scrape import scrape_url_async
+        from emb.types import ScrapeResult
 
-# ===========================================================================
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = "<html><body><main>cards</main></body></html>"
+
+        cardy_result = ScrapeResult(url="https://example.com", markdown=_CARDY_TEXT, success=True)
+        rich_lp_result = ScrapeResult(
+            url="https://example.com",
+            markdown="# Example\n\n" + " ".join(["word"] * 80),
+            success=True,
+        )
+
+        async def run():
+            with patch("emb.scrape.validate_url"), \
+                 patch("emb.scrape.httpx.AsyncClient") as MockClient, \
+                 patch("emb.scrape._scrape_html", return_value=cardy_result), \
+                 patch("emb.scrape._scrape_lightpanda", return_value=rich_lp_result) as mock_lp:
+                instance = MagicMock()
+
+                async def fake_get(*a, **kw):
+                    return mock_resp
+
+                instance.get = fake_get
+
+                async def fake_aenter(*a, **kw):
+                    return instance
+
+                async def fake_aexit(*a, **kw):
+                    return False
+
+                instance.__aenter__ = fake_aenter
+                instance.__aexit__ = fake_aexit
+                MockClient.return_value = instance
+                result = await scrape_url_async("https://example.com")
+                mock_lp.assert_called_once()
+                return result
+
+        result = asyncio.run(run())
+        assert result.success is True
+        assert result.markdown == rich_lp_result.markdown
+
+
 # interact
-# ===========================================================================
 
 class TestInteract:
-    def test_no_prompt_calls_scrape_markdown(self):
+    def test_no_prompt_propagates_scrape_failure(self):
         from emb.interact import interact
+        from emb.types import ScrapeResult
+
+        failed = ScrapeResult(url="https://example.com", success=False, error="network error")
 
         with patch("emb.interact.validate_url"), \
-             patch("emb.scrape.scrape_markdown", return_value="Page content") as mock_scrape:
+             patch("emb.scrape.scrape_url", return_value=failed), \
+             patch("emb.scrape.scrape_markdown", side_effect=AssertionError("should use scrape_url")):
             result = interact("https://example.com", prompt="", use_browser=True)
 
-        mock_scrape.assert_called_once_with("https://example.com", use_browser=True)
+        assert result.success is False
+        assert result.error == "network error"
+
+    def test_no_prompt_returns_scraped_content(self):
+        from emb.interact import interact
+        from emb.types import ScrapeResult
+
+        with patch("emb.interact.validate_url"), \
+             patch(
+                 "emb.scrape.scrape_url",
+                 return_value=ScrapeResult(url="https://example.com", markdown="Page content", success=True),
+             ) as mock_scrape:
+            result = interact("https://example.com", prompt="", use_browser=True)
+
+        mock_scrape.assert_called_once_with("https://example.com", use_browser=True, timeout=60)
         assert result.success is True
         assert result.content == "Page content"
 
@@ -591,10 +663,48 @@ class TestInteract:
         assert result.success is False
         assert "model" in result.error.lower() or "invalid" in result.error.lower()
 
+    def test_no_browser_prompt_uses_passed_model(self):
+        from emb.interact import interact
+        from emb.types import ScrapeResult
 
-# ===========================================================================
+        scraped = ScrapeResult(url="https://example.com", markdown="Page body", title="Page", success=True)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "Answer"}}]
+        }
+
+        with patch("emb.interact.validate_url"), \
+             patch("emb.scrape.scrape_url", return_value=scraped), \
+             patch("httpx.post", return_value=mock_resp) as mock_post:
+            result = interact(
+                "https://example.com",
+                prompt="summarize",
+                api_key="sk-test",
+                model="custom-model",
+                use_browser=False,
+            )
+
+        assert result.success is True
+        assert mock_post.call_args.kwargs["json"]["model"] == "custom-model"
+
+    def test_no_browser_non_openai_provider_returns_clear_error(self):
+        from emb.interact import interact
+
+        with patch("emb.interact.validate_url"):
+            result = interact(
+                "https://example.com",
+                prompt="summarize",
+                provider="anthropic",
+                api_key="sk-test",
+                use_browser=False,
+            )
+
+        assert result.success is False
+        assert "openai-compatible" in result.error.lower()
+
+
 # extract (agent.py)
-# ===========================================================================
 
 class TestExtract:
     def test_scrape_failure_returns_error_dict(self):
@@ -608,7 +718,7 @@ class TestExtract:
 
         assert "error" in result
 
-    def test_no_api_key_returns_markdown_dict(self):
+    def test_no_api_key_returns_error_dict(self):
         from emb.agent import extract
         from emb.types import ScrapeResult
 
@@ -619,7 +729,8 @@ class TestExtract:
             result = extract("https://x.com", api_key="")
 
         mock_post.assert_not_called()
-        assert result == {"markdown": "# Hello", "title": "Hello"}
+        assert "error" in result
+        assert "api key" in result["error"].lower() or "ember_llm_api_key" in result["error"].lower()
 
     def test_llm_returns_valid_json(self):
         import json
@@ -674,9 +785,7 @@ class TestExtract:
         assert "llm" in result["error"].lower() or "failed" in result["error"].lower()
 
 
-# ===========================================================================
 # _browser.ensure
-# ===========================================================================
 
 class TestBrowserEnsure:
     def test_env_path_real_file_returned(self, tmp_path):
@@ -747,13 +856,11 @@ class TestBrowserEnsure:
                     with pytest.raises(RuntimeError) as exc_info:
                         _browser.ensure()
 
-            # Should NOT mention WSL — that's only for Windows
+            # WSL should not appear on non-Windows platforms.
             assert "wsl" not in str(exc_info.value).lower()
 
 
-# ===========================================================================
 # _browser.is_available
-# ===========================================================================
 
 class TestBrowserIsAvailable:
     def test_binary_exists_returns_true(self, tmp_path):
@@ -780,9 +887,7 @@ class TestBrowserIsAvailable:
         assert result is False
 
 
-# ===========================================================================
 # validate_url
-# ===========================================================================
 
 class TestValidateUrl:
     def test_valid_public_url_passes(self):
@@ -815,7 +920,7 @@ class TestValidateUrl:
         from emb._url_validator import validate_url
 
         with pytest.raises(ValueError, match="blocked"):
-            validate_url("https://localhost/")  # real socket call — localhost → 127.0.0.1
+            validate_url("https://localhost/")  # localhost resolves to loopback
 
     def test_link_local_169254x_blocked(self):
         import socket
@@ -874,10 +979,31 @@ class TestValidateUrl:
             with pytest.raises(ValueError, match="Cannot resolve"):
                 validate_url("https://thisdomaindoesnotexist.invalid/")
 
+    def test_redirect_target_is_revalidated(self):
+        from emb.scrape import scrape_url
 
-# ===========================================================================
-# Types — default field values
-# ===========================================================================
+        def fake_validate(url: str) -> None:
+            if "127.0.0.1" in url:
+                raise ValueError("URL resolves to a blocked address (127.0.0.1)")
+
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 302
+        redirect_resp.headers = {"location": "http://127.0.0.1/admin"}
+        redirect_resp.url = "https://example.com/start"
+
+        with patch("emb.scrape.validate_url", side_effect=fake_validate), \
+             patch("emb.scrape.httpx.Client") as MockClient:
+            mock_client = MagicMock()
+            mock_client.get.return_value = redirect_resp
+            MockClient.return_value.__enter__.return_value = mock_client
+            MockClient.return_value.__exit__.return_value = False
+            result = scrape_url("https://example.com", use_browser=False)
+
+        assert result.success is False
+        assert "blocked address" in (result.error or "")
+
+
+# Types
 
 class TestTypeDefaults:
     def test_scrape_result_defaults(self):
@@ -904,9 +1030,7 @@ class TestTypeDefaults:
         assert r.error is None
 
 
-# ===========================================================================
-# _sitemap_urls — recursion guard
-# ===========================================================================
+# _sitemap_urls
 
 class TestSitemapUrlsRecursion:
     def test_stops_at_depth_3(self):
@@ -960,9 +1084,7 @@ class TestSitemapUrlsRecursion:
         assert call_count["n"] <= 4  # depth 0, 1, 2, 3 → at most 4 GET requests
 
 
-# ===========================================================================
-# _find_sitemaps — robots.txt candidate cap
-# ===========================================================================
+# _find_sitemaps
 
 class TestFindSitemapsCap:
     def test_robots_txt_cap_at_10_candidates(self):
@@ -977,7 +1099,7 @@ class TestFindSitemapsCap:
         robots_resp.status_code = 200
         robots_resp.text = robots_lines
 
-        # HEAD returns 404 for all — so none end up in `found`; we just test the candidate list
+        # Every HEAD returns 404, so only the candidate cap matters here.
         head_resp = MagicMock()
         head_resp.status_code = 404
 
@@ -987,15 +1109,13 @@ class TestFindSitemapsCap:
 
         _find_sitemaps("https://example.com/", mock_client)
 
-        # Count HEAD calls — should be ≤ 10 (initial 3 defaults + capped robots additions)
+        # HEAD calls should stay at or below the cap.
         head_call_count = mock_client.head.call_count
         # The candidate list is capped at 10, so we should never HEAD more than 10 URLs
         assert head_call_count <= 10
 
 
-# ===========================================================================
 # crawl
-# ===========================================================================
 
 class TestCrawl:
     def test_ssrf_blocked_url_returns_failure(self):
@@ -1084,10 +1204,30 @@ class TestCrawl:
 
         assert external in call_urls
 
+    def test_same_domain_true_filters_sitemap_urls_from_other_domains(self):
+        from emb.crawl import crawl
+        from emb.types import ScrapeResult
 
-# ===========================================================================
+        scrape_result = ScrapeResult(url="https://example.com", markdown=_RICH_TEXT, success=True)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = "<html><body>no links</body></html>"
+
+        with patch("emb.crawl.validate_url"), \
+             patch("emb.crawl._find_sitemaps", return_value=["https://example.com/sitemap.xml"]), \
+             patch("emb.crawl._sitemap_urls", return_value=["https://other.com/offsite"]), \
+             patch("emb.crawl._scrape_html", return_value=scrape_result), \
+             patch("emb.crawl.httpx.Client") as MockClient:
+            mock_client = MagicMock()
+            mock_client.get.return_value = mock_resp
+            MockClient.return_value.__enter__.return_value = mock_client
+            MockClient.return_value.__exit__.return_value = False
+            result = crawl("https://example.com", max_pages=5, max_depth=1, same_domain=True)
+
+        assert all("example.com" in page.url for page in result.pages)
+
+
 # map_url
-# ===========================================================================
 
 class TestMapUrl:
     def test_ssrf_blocked_url_returns_error(self):
@@ -1129,3 +1269,37 @@ class TestMapUrl:
 
         assert result.total >= 1
         assert any("example.com" in link for link in result.links)
+
+    def test_sitemap_urls_stay_on_requested_domain(self):
+        from emb.map import map_url
+
+        sitemap_xml = (
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            "<url><loc>https://other.com/offsite</loc></url>"
+            "<url><loc>https://example.com/on-site</loc></url>"
+            "</urlset>"
+        )
+
+        def fake_get(url, **kwargs):
+            r = MagicMock()
+            if "robots.txt" in url:
+                r.status_code = 404
+                r.text = ""
+            elif "/sitemap" in url:
+                r.status_code = 200
+                r.text = sitemap_xml
+            else:
+                r.status_code = 200
+                r.text = "<html><body></body></html>"
+            return r
+
+        with patch("emb.map.validate_url"), \
+             patch("emb.map.httpx.Client") as MockClient:
+            mock_client = MagicMock()
+            mock_client.get.side_effect = fake_get
+            MockClient.return_value.__enter__.return_value = mock_client
+            MockClient.return_value.__exit__.return_value = False
+            result = map_url("https://example.com/")
+
+        assert "https://example.com/on-site" in result.links
+        assert "https://other.com/offsite" not in result.links

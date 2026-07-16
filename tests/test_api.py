@@ -1,9 +1,3 @@
-"""Tests for the FastAPI endpoints in emb.api.
-
-Uses fastapi.testclient.TestClient — no real HTTP connections, no subprocesses.
-All underlying ember functions are mocked at the call site (emb.api.*).
-"""
-
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -12,9 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-# ---------------------------------------------------------------------------
-# Helpers — build a fresh TestClient so env-var changes (API key) are visible
-# ---------------------------------------------------------------------------
+# Helpers
 
 def _make_client(monkeypatch=None, api_key: str = "") -> TestClient:
     import emb.api as api_mod
@@ -22,20 +14,19 @@ def _make_client(monkeypatch=None, api_key: str = "") -> TestClient:
     if api_key:
         if monkeypatch:
             monkeypatch.setenv("EMBER_API_KEY", api_key)
-        # Patch the module-level variable the middleware reads
+        # Patch the module-level key used by the middleware.
         with patch.object(api_mod, "_API_KEY", api_key):
             client = TestClient(api_mod.app, raise_server_exceptions=False)
-            # Return already-patched client — tests re-patch inside their body
+            # Auth tests patch the key again inside each case.
     else:
         if monkeypatch:
             monkeypatch.delenv("EMBER_API_KEY", raising=False)
 
-    # For simplicity, always return a client against the already-imported app.
-    # Auth-specific tests patch _API_KEY themselves.
+    # Reuse the imported app.
     return TestClient(api_mod.app, raise_server_exceptions=False)
 
 
-# Convenience: a single shared client with no API key set (most tests don't use auth)
+# Shared client with auth off.
 @pytest.fixture()
 def client():
     import emb.api as api_mod
@@ -50,9 +41,7 @@ def authed_client():
         yield TestClient(api_mod.app, raise_server_exceptions=False)
 
 
-# ---------------------------------------------------------------------------
-# Helpers for mocking scrape / crawl results
-# ---------------------------------------------------------------------------
+# Mock results
 
 def _ok_scrape(url="https://example.com", markdown="# Hello", title="Hello"):
     from emb.types import ScrapeResult
@@ -85,9 +74,7 @@ def _ok_search():
     return [SearchResult(url="https://a.com", title="A", description="desc")]
 
 
-# ===========================================================================
 # Root and health
-# ===========================================================================
 
 class TestRootAndHealth:
     def test_root_returns_endpoint_map(self, client):
@@ -114,9 +101,7 @@ class TestRootAndHealth:
         assert resp.json()["status"] == "ok"
 
 
-# ===========================================================================
 # POST /scrape
-# ===========================================================================
 
 class TestApiScrape:
     def test_scrape_success_200(self, client):
@@ -138,10 +123,7 @@ class TestApiScrape:
         assert resp.status_code == 502
 
     def test_scrape_private_ip_returns_400(self, client):
-        # 10.0.0.1 is RFC-1918 private — validate_url blocks it
-        # We must NOT patch validate_url here; the real check should fire.
-        # But socket.gethostbyname may not resolve "10.0.0.1" as a hostname;
-        # supply a literal IP URL that validate_url will reject.
+        # Use the real private-IP check here.
         resp = client.post("/scrape", json={"url": "https://10.0.0.1/"})
         assert resp.status_code == 400
 
@@ -158,9 +140,7 @@ class TestApiScrape:
         assert resp.status_code == 422
 
 
-# ===========================================================================
 # POST /crawl
-# ===========================================================================
 
 class TestApiCrawl:
     def test_crawl_success(self, client):
@@ -188,9 +168,7 @@ class TestApiCrawl:
         assert resp.status_code == 400
 
 
-# ===========================================================================
 # POST /search
-# ===========================================================================
 
 class TestApiSearch:
     def test_search_success(self, client):
@@ -210,9 +188,7 @@ class TestApiSearch:
         assert resp.status_code == 502
 
 
-# ===========================================================================
 # POST /map
-# ===========================================================================
 
 class TestApiMap:
     def test_map_success(self, client):
@@ -230,9 +206,7 @@ class TestApiMap:
         assert resp.status_code == 400
 
 
-# ===========================================================================
 # POST /interact
-# ===========================================================================
 
 class TestApiInteract:
     def test_interact_success(self, client):
@@ -259,9 +233,7 @@ class TestApiInteract:
         assert resp.status_code == 400
 
 
-# ===========================================================================
 # POST /extract and POST /agent
-# ===========================================================================
 
 class TestApiExtract:
     def test_extract_success(self, client):
@@ -293,9 +265,7 @@ class TestApiExtract:
         assert resp.status_code == 502
 
 
-# ===========================================================================
 # Auth middleware
-# ===========================================================================
 
 class TestAuthMiddleware:
     def test_request_without_key_returns_401(self, authed_client):

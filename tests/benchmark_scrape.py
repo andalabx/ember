@@ -1,4 +1,4 @@
-"""Scrape quality benchmark — run with: python tests/benchmark_scrape.py"""
+# Run with: python tests/benchmark_scrape.py
 
 from __future__ import annotations
 

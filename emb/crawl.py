@@ -1,5 +1,3 @@
-"""Crawl a website. BFS with sitemap support."""
-
 from __future__ import annotations
 
 import logging
@@ -10,6 +8,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
+from emb._http import safe_get, safe_head
 from emb._url_validator import validate_url
 from emb.scrape import _MIN_CONTENT_WORDS, _scrape_html, _scrape_lightpanda
 from emb.types import CrawlPage, CrawlResult
@@ -21,6 +20,7 @@ def _sitemap_urls(
     url: str,
     client: httpx.Client,
     *,
+    allowed_domain: str | None = None,
     _visited: set[str] | None = None,
     _depth: int = 0,
 ) -> list[str]:
@@ -30,25 +30,40 @@ def _sitemap_urls(
         return []
     _visited.add(url)
     try:
-        resp = client.get(url, timeout=15)
+        resp = safe_get(client, url, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml-xml")
         urls = []
-        # Sitemap index: recurse into sub-sitemaps
+        # Recurse into sub-sitemaps.
         for sm in soup.find_all("sitemap"):
             loc = sm.find("loc")
             if loc and loc.text:
-                try:
-                    validate_url(loc.text)
-                except ValueError:
-                    _log.debug("Skipping blocked sub-sitemap: %s", loc.text)
+                next_url = loc.text.strip()
+                if allowed_domain and urlparse(next_url).netloc != allowed_domain:
+                    _log.debug("Skipping off-domain sub-sitemap: %s", next_url)
                     continue
-                urls.extend(_sitemap_urls(loc.text, client, _visited=_visited, _depth=_depth + 1))
-        # Regular sitemap: collect <url><loc> entries only
+                try:
+                    validate_url(next_url)
+                except ValueError:
+                    _log.debug("Skipping blocked sub-sitemap: %s", next_url)
+                    continue
+                urls.extend(
+                    _sitemap_urls(
+                        next_url,
+                        client,
+                        allowed_domain=allowed_domain,
+                        _visited=_visited,
+                        _depth=_depth + 1,
+                    )
+                )
+        # Collect page URLs.
         for url_tag in soup.find_all("url"):
             loc = url_tag.find("loc")
             if loc and loc.text:
                 loc_url = loc.text.strip()
+                if allowed_domain and urlparse(loc_url).netloc != allowed_domain:
+                    _log.debug("Skipping off-domain sitemap URL: %s", loc_url)
+                    continue
                 try:
                     validate_url(loc_url)
                     urls.append(loc_url)
@@ -68,11 +83,14 @@ def _find_sitemaps(url: str, client: httpx.Client) -> list[str]:
         f"{base}/sitemap/",
     ]
     try:
-        resp = client.get(f"{base}/robots.txt", timeout=10)
+        resp = safe_get(client, f"{base}/robots.txt", timeout=10)
         if resp.status_code == 200:
             for line in resp.text.splitlines():
                 if line.lower().startswith("sitemap:") and len(candidates) < 10:
                     candidate = line.split(":", 1)[1].strip()
+                    if urlparse(candidate).netloc != parsed.netloc:
+                        _log.debug("Skipping off-domain robots.txt sitemap: %s", candidate)
+                        continue
                     try:
                         validate_url(candidate)
                         candidates.insert(0, candidate)
@@ -82,16 +100,17 @@ def _find_sitemaps(url: str, client: httpx.Client) -> list[str]:
         pass
     found = []
     for sm in candidates:
+        if urlparse(sm).netloc != parsed.netloc:
+            continue
         try:
-            if client.head(sm, timeout=5).status_code == 200:
+            if safe_head(client, sm, timeout=5).status_code == 200:
                 found.append(sm)
         except Exception:
             continue
     return found
 
 
-# BFS. Sitemap pages seeded first, then links. One fetch per page covers
-# both content extraction and link discovery.
+# Crawl with BFS.
 def crawl(
     url: str,
     *,
@@ -113,10 +132,13 @@ def crawl(
     queue: deque[tuple[str, int]] = deque()
     pages: list[CrawlPage] = []
 
-    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+    with httpx.Client(timeout=timeout) as client:
         if use_sitemap:
             for sm in _find_sitemaps(url, client):
-                for u in _sitemap_urls(sm, client):
+                for u in _sitemap_urls(sm, client, allowed_domain=domain if same_domain else None):
+                    if same_domain and urlparse(u).netloc != domain:
+                        _log.debug("Skipping off-domain sitemap seed: %s", u)
+                        continue
                     if u not in visited:
                         queue.append((u, 0))
                         visited.add(u)
@@ -131,7 +153,7 @@ def crawl(
                 continue
 
             try:
-                resp = client.get(page_url, timeout=timeout)
+                resp = safe_get(client, page_url, timeout=timeout)
                 if resp.status_code != 200:
                     _log.debug("Skipping %s: HTTP %d", page_url, resp.status_code)
                     continue
@@ -159,7 +181,7 @@ def crawl(
                     if same_domain and p.netloc != domain:
                         continue
                     clean = link.split("#")[0]
-                    # Use len(visited) as cap to account for failed pages
+                    # Keep the queue bounded.
                     if clean and clean not in visited and len(visited) < max_pages * 4:
                         visited.add(clean)
                         queue.append((clean, depth + 1))

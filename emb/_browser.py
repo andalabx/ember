@@ -1,9 +1,3 @@
-"""Auto-download and cache Lightpanda browser binary.
-
-The browser is downloaded on first use — no manual install required.
-Cached at ~/.cache/ember/lightpanda for subsequent use.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -23,8 +17,7 @@ BINARY_PATH = CACHE_DIR / BINARY_NAME
 
 LIGHTPANDA_VERSION = "0.3.3"
 
-# SHA-256 digests for each platform binary at LIGHTPANDA_VERSION.
-# Update both this dict and LIGHTPANDA_VERSION together on every release bump.
+# SHA-256 digests for the pinned Lightpanda binaries.
 _BINARY_HASHES: dict[tuple[str, str], str] = {
     ("Linux",  "x86_64"):  "b6ab613846f5291cc6bafd7f44ffb9718df51bf00eb83954e1fc5d7f52c7b886",
     ("Linux",  "aarch64"): "db35c06ee074a79c2e039965c404e578748c1d22cb296e853461970ea0c2945f",
@@ -69,13 +62,13 @@ def _platform_url() -> str | None:
 
 
 def ensure() -> str:
-    # Check env override
+    # Check the env override.
     env_path = os.environ.get("EMBER_LIGHTPANDA_PATH")
     if env_path:
         p = Path(env_path)
         if p.exists() and p.is_file():
             return str(p)
-        # Bare name (no path separator) — allow PATH resolution
+        # Allow a bare name from PATH.
         if os.sep not in env_path and "/" not in env_path:
             try:
                 r = subprocess.run([env_path, "version"], capture_output=True, text=True, timeout=5)
@@ -88,7 +81,7 @@ def ensure() -> str:
             f"Check the path and try again."
         )
 
-    # Check PATH
+    # Check PATH.
     try:
         r = subprocess.run(["lightpanda", "version"], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
@@ -96,7 +89,7 @@ def ensure() -> str:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
-    # Check cached binary
+    # Check the cached binary.
     if BINARY_PATH.exists():
         try:
             r = subprocess.run([str(BINARY_PATH), "version"], capture_output=True, text=True, timeout=5)
@@ -106,7 +99,7 @@ def ensure() -> str:
             pass
         BINARY_PATH.unlink(missing_ok=True)
 
-    # Download
+    # Download the binary.
     url = _platform_url()
     if not url:
         if platform.system() == "Windows":

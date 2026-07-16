@@ -39,6 +39,8 @@ coverage.xml
 test-report.json
 bench-*.json
 eval-*.json
+ember_results/
+.ember_results
 
 # Lightpanda browser cache
 .cache/ember/

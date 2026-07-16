@@ -1,5 +1,3 @@
-"""FastAPI server. Exposes every ember feature as an HTTP endpoint."""
-
 from __future__ import annotations
 
 import os

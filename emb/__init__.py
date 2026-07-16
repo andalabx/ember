@@ -1,15 +1,8 @@
-"""ember — open source, lightweight headless browser for AI agents."""
-
 from __future__ import annotations
 
 __version__ = "0.1.0"
 
-# Lazily re-export the most-used public functions so `from emb import scrape_url`
-# works without loading heavy dependencies at `import emb` time.
-#
-# Names that clash with a same-named submodule (search, crawl) can't be re-exported
-# this way — Python returns the submodule before __getattr__ fires. Use the submodule
-# form for those: `from emb.search import search`, `from emb.crawl import crawl`.
+# Lazy imports keep package startup light.
 
 __all__ = [
     "__version__",

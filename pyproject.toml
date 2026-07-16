@@ -17,6 +17,7 @@ dependencies = [
     "ddgs>=1.0",
     "typer>=0.15",
     "rich>=13.0",
+    "prompt_toolkit>=3.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.0",

@@ -1,5 +1,3 @@
-"""Web search via DuckDuckGo. Free. No API key needed."""
-
 from __future__ import annotations
 
 from ddgs import DDGS

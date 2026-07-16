@@ -1,9 +1,3 @@
-"""Tests for every CLI command in emb.cli.
-
-Uses typer.testing.CliRunner — no real network, no subprocesses.
-All underlying functions are mocked at the call site (emb.cli imports).
-"""
-
 from __future__ import annotations
 
 import json
@@ -19,9 +13,7 @@ from emb.cli import app
 runner = CliRunner()
 
 
-# ---------------------------------------------------------------------------
-# Helpers — pre-built return values
-# ---------------------------------------------------------------------------
+# Helpers
 
 def _ok_scrape(url="https://example.com", markdown="Page markdown", title="Page Title"):
     from emb.types import ScrapeResult
@@ -62,9 +54,7 @@ def _search_results():
     ]
 
 
-# ===========================================================================
 # version
-# ===========================================================================
 
 class TestVersion:
     def test_version_prints_version_string(self):
@@ -73,9 +63,7 @@ class TestVersion:
         assert "ember v0.1.0" in result.output
 
 
-# ===========================================================================
 # serve
-# ===========================================================================
 
 class TestCmdServe:
     def test_serve_starts_with_default_port(self):
@@ -94,7 +82,7 @@ class TestCmdServe:
 
     def test_serve_ember_port_env_var(self, monkeypatch):
         monkeypatch.setenv("EMBER_PORT", "9000")
-        # Re-import app after env change so the default is re-evaluated
+        # Reload so the env-based default is picked up.
         from importlib import reload
         import emb.cli as cli_mod
         reload(cli_mod)
@@ -114,9 +102,7 @@ class TestCmdServe:
         assert "127.0.0.1" in result.output
 
 
-# ===========================================================================
-# url (cmd_url)
-# ===========================================================================
+# url
 
 class TestCmdUrl:
     def test_url_with_title_exit_0(self):
@@ -133,7 +119,7 @@ class TestCmdUrl:
             result = runner.invoke(app, ["url", "https://example.com"])
 
         assert result.exit_code == 0
-        # No heading line should appear (title is blank)
+        # Blank title should not render a heading.
         assert "# " not in result.output
 
     def test_url_failure_exit_1(self):
@@ -141,13 +127,11 @@ class TestCmdUrl:
             result = runner.invoke(app, ["url", "https://example.com"])
 
         assert result.exit_code == 1
-        # Error message should appear somewhere in the combined output
+        # The output should include the error.
         assert "connect timeout" in result.output or "Error" in result.output
 
 
-# ===========================================================================
 # search
-# ===========================================================================
 
 class TestCmdSearch:
     def test_search_prints_results(self):
@@ -167,9 +151,7 @@ class TestCmdSearch:
         assert "python" in result.output
 
 
-# ===========================================================================
 # crawl
-# ===========================================================================
 
 class TestCmdCrawl:
     def test_crawl_success_exit_0(self):
@@ -194,9 +176,7 @@ class TestCmdCrawl:
         assert call_kwargs.get("max_pages") == 10
 
 
-# ===========================================================================
 # map
-# ===========================================================================
 
 class TestCmdMap:
     def test_map_prints_urls(self):
@@ -215,9 +195,7 @@ class TestCmdMap:
         assert "2" in result.output  # total == 2
 
 
-# ===========================================================================
 # interact
-# ===========================================================================
 
 class TestCmdInteract:
     def test_interact_success_exit_0(self):
@@ -246,9 +224,7 @@ class TestCmdInteract:
         assert call_kwargs.get("provider") == "anthropic"
 
 
-# ===========================================================================
 # extract
-# ===========================================================================
 
 class TestCmdExtract:
     def test_extract_content_dict_prints_content(self):
@@ -265,7 +241,7 @@ class TestCmdExtract:
             result = runner.invoke(app, ["extract", "https://example.com"])
 
         assert result.exit_code == 0
-        # Rich's Markdown renderer converts "# Title" to a styled heading — no literal "#"
+        # Rich renders "# Title" as a heading, not raw text.
         assert "Title" in result.output
         assert "Content." in result.output
 
@@ -286,6 +262,18 @@ class TestCmdExtract:
         assert result.exit_code == 1
         assert "Failed to scrape URL" in result.output or "Error" in result.output
 
+    def test_extract_missing_key_error_is_concise(self):
+        payload = {
+            "error": "extract() requires EMBER_LLM_API_KEY. "
+                     "Use ember url or scrape_url() when you want raw page markdown."
+        }
+        with patch("emb.agent.extract", return_value=payload):
+            result = runner.invoke(app, ["extract", "https://example.com"])
+
+        assert result.exit_code == 1
+        assert "LLM API key required for extract" in result.output
+        assert "EMBER_LLM_API_KEY" in result.output
+
     def test_extract_model_from_env_var(self, monkeypatch):
         # We can verify the model is forwarded by inspecting the mock call args
         with patch("emb.agent.extract", return_value={"content": "ok"}) as mock_extract:
@@ -305,10 +293,18 @@ class TestCmdExtract:
         # Default model is "gpt-4o-mini" (cli.py line 103)
         assert call_kwargs.get("model") in ("gpt-4o-mini", "")
 
+    def test_extract_save_writes_full_json_payload(self, tmp_path):
+        payload = {"content": "Extracted text here.", "sources": ["https://example.com"]}
+        out_file = tmp_path / "extract.json"
 
-# ===========================================================================
+        with patch("emb.agent.extract", return_value=payload):
+            result = runner.invoke(app, ["extract", "https://example.com", "--save", str(out_file)])
+
+        assert result.exit_code == 0
+        assert json.loads(out_file.read_text(encoding="utf-8")) == payload
+
+
 # batch
-# ===========================================================================
 
 class TestCmdBatch:
     def _write_urls(self, tmp_path: Path, lines: list[str]) -> Path:
@@ -363,10 +359,35 @@ class TestCmdBatch:
 
         assert result.exit_code == 0
 
+    def test_batch_strips_utf8_bom_from_first_url(self, tmp_path):
+        f = tmp_path / "urls.txt"
+        f.write_text("\ufeffhttps://a.com\nhttps://b.com\n", encoding="utf-8")
+        seen: list[str] = []
 
-# ===========================================================================
+        async def _fake_scrape(url, **kw):
+            seen.append(url)
+            return _ok_scrape(url=url)
+
+        with patch("emb.scrape.scrape_url_async", side_effect=_fake_scrape):
+            result = runner.invoke(app, ["batch", str(f)])
+
+        assert result.exit_code == 0
+        assert seen == ["https://a.com", "https://b.com"]
+
+    def test_batch_replaces_blank_fetch_error(self, tmp_path):
+        f = self._write_urls(tmp_path, ["https://a.com"])
+
+        async def _fake_scrape(url, **kw):
+            return _fail_scrape(url=url, error="fetch: ")
+
+        with patch("emb.scrape.scrape_url_async", side_effect=_fake_scrape):
+            result = runner.invoke(app, ["batch", str(f)])
+
+        assert result.exit_code == 0
+        assert "request failed" in result.output
+
+
 # config
-# ===========================================================================
 
 class TestCmdConfig:
     def test_config_show_current(self, tmp_path, monkeypatch):
@@ -374,7 +395,8 @@ class TestCmdConfig:
         monkeypatch.delenv("EMBER_SAVE_DIR", raising=False)
         result = runner.invoke(app, ["config"])
         assert result.exit_code == 0
-        assert "save_dir" in result.output or "not set" in result.output
+        assert "save_dir" in result.output
+        assert "ember_results" in result.output
 
     def test_config_set_save_dir(self, tmp_path, monkeypatch):
         cfg_path = tmp_path / "config.json"
@@ -394,6 +416,15 @@ class TestCmdConfig:
         data = json.loads(cfg_path.read_text())
         assert "save_dir" not in data
 
+    def test_config_clear_save_dir_flag(self, tmp_path, monkeypatch):
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(json.dumps({"save_dir": "/some/path"}))
+        monkeypatch.setattr("emb.cli._CONFIG_PATH", cfg_path)
+        result = runner.invoke(app, ["config", "--clear-save-dir"])
+        assert result.exit_code == 0
+        data = json.loads(cfg_path.read_text())
+        assert "save_dir" not in data
+
     def test_config_reset(self, tmp_path, monkeypatch):
         cfg_path = tmp_path / "config.json"
         cfg_path.write_text(json.dumps({"save_dir": "/some/path"}))
@@ -401,3 +432,37 @@ class TestCmdConfig:
         result = runner.invoke(app, ["config", "--reset"])
         assert result.exit_code == 0
         assert json.loads(cfg_path.read_text()) == {}
+
+
+class TestSession:
+    def test_session_intro_shows_banner_and_examples(self):
+        result = runner.invoke(app, [], input="quit\n")
+
+        assert result.exit_code == 0
+        assert "████" in result.output
+        assert "Quick Start" in result.output
+        assert "url example.com" in result.output
+        assert "quit" in result.output
+        assert "ember_results" in result.output
+
+    def test_session_clear_redraws_home(self):
+        result = runner.invoke(app, [], input="clear\nquit\n")
+
+        assert result.exit_code == 0
+        assert result.output.count("████") >= 2
+        assert result.output.count("Quick Start") >= 2
+
+    def test_session_ctrl_l_redraws_home(self):
+        result = runner.invoke(app, [], input="\f\nquit\n")
+
+        assert result.exit_code == 0
+        assert result.output.count("████") >= 2
+        assert result.output.count("Quick Start") >= 2
+
+    def test_session_help_shows_full_guide(self):
+        result = runner.invoke(app, [], input="help\nquit\n")
+
+        assert result.exit_code == 0
+        assert "Browse" in result.output
+        assert "Outside Session" in result.output
+        assert "config --save-dir ./out" in result.output

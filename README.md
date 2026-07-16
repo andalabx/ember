@@ -63,7 +63,7 @@ ember serve                    # start the REST API
 
 ### Interactive session
 
-`ember` with no arguments opens a persistent session. Commands and a save guide are shown on startup — no need to type `help` first.
+`ember` with no arguments opens a persistent session. Startup shows a short quick start, and `help` shows the full guide.
 
 <pre>
   ███████╗███╗   ███╗██████╗ ███████╗██████╗
@@ -75,26 +75,21 @@ ember serve                    # start the REST API
 
   v0.1.0  lightweight headless browser for AI agents
 
-  url        &lt;url&gt;              scrape a page to markdown
-  search     &lt;query&gt;            web search
-  crawl      &lt;url&gt;              crawl a whole website
-  map        &lt;url&gt;              discover all URLs on a site
-  interact   &lt;url&gt;              control a browser with natural language
-  extract    &lt;url&gt;              pull structured data with an LLM
-  batch      &lt;urls.txt&gt;         scrape many URLs concurrently
+  Quick Start
+  url example.com                          scrape one page
+  search openai api                        search the web
+  interact example.com -p "summarize"      control a page with AI
+  output ./research                        change auto-save folder
+  help                                     show the full guide
+  quit                                     exit
 
-  ─── saving results ───────────────────────────────────────────
-  one result   url example.com -o page.md
-  everything   output ./research/  then all results auto-save
-  last result  save page.md        after any command
+  ✓ auto-save on → ember_results
 
-ember › url andausman.com
-ember › save page.md
-
-ember › output ./research/       # auto-save everything from here
-ember/research › search "python asyncio" -n 10
-ember/research › crawl docs.example.com
-ember/research › output clear    # stop auto-saving
+ember › url andalabx.com
+ember › help
+ember › output ./research
+ember › search "python asyncio" -n 10
+ember › output clear
 ember › quit
 </pre>
 
@@ -113,6 +108,8 @@ ember extract https://example.com/pricing \
   --prompt "list all plans and prices as JSON"
 ```
 
+`extract` requires `EMBER_LLM_API_KEY`. `interact --no-browser` also uses the OpenAI-compatible LLM path, so it needs `EMBER_LLM_API_KEY` and optionally `EMBER_LLM_BASE_URL`. Use `ember url` when you want raw page content without an LLM.
+
 ### Saving results
 
 All commands accept `-o` to save that run:
@@ -125,12 +122,12 @@ ember map https://example.com -o urls.txt
 ember extract https://example.com -o data.json
 ```
 
-Set a default save directory so you never need `-o`:
+The CLI saves to `ember_results/` by default. Set a different default save directory if you want:
 
 ```bash
 ember config --save-dir ./research/    # persists across sessions
 ember config                           # show current settings
-ember config --save-dir ""             # clear it
+ember config --clear-save-dir          # clear it
 ```
 
 Or use an environment variable for the current shell:
@@ -139,7 +136,7 @@ Or use an environment variable for the current shell:
 EMBER_SAVE_DIR=./out ember url https://example.com
 ```
 
-In a session, the three ways to save:
+In a session, the main save paths are:
 
 ```
 ember › url example.com -o page.md     # save just this run
@@ -154,6 +151,8 @@ ember › output ./research/             # auto-save all results from now on
 ember batch urls.txt                      # 5 concurrent by default
 ember batch urls.txt -c 20 -o ./pages/   # 20 parallel, save to dir
 ```
+
+On Windows, UTF-8 files with a BOM are supported.
 
 ---
 
@@ -318,13 +317,13 @@ Firecrawl needs 4–8 GB in Docker. Crawl4AI imports at 171 MB before scraping a
 
 | Variable                  | Default                        | Description |
 |---------------------------|--------------------------------|-------------|
-| `EMBER_SAVE_DIR`          | _(none)_                       | Default directory for saved results. Overrides `ember config --save-dir` for the current shell. |
+| `EMBER_SAVE_DIR`          | `ember_results/`               | Default directory for saved results. Overrides `ember config --save-dir` for the current shell. |
 | `EMBER_API_KEY`           | _(none)_                       | Enables API key auth on the REST server (`X-API-Key` header). |
 | `EMBER_PORT`              | `51251`                        | Default port for `ember serve`. Overridden by `--port` flag. |
 | `EMBER_INTERACT_PROVIDER` | `openai`                       | LLM provider for `interact` (`openai`, `anthropic`, `ollama`, etc.). |
-| `EMBER_LLM_API_KEY`       | _(none)_                       | API key for LLM-powered extraction. |
-| `EMBER_LLM_BASE_URL`      | `https://api.openai.com/v1`    | LLM API endpoint for extraction. |
-| `EMBER_LLM_MODEL`         | `gpt-4o-mini`                  | Model used by `extract`. |
+| `EMBER_LLM_API_KEY`       | _(none)_                       | API key for `extract` and for `interact --no-browser`. |
+| `EMBER_LLM_BASE_URL`      | `https://api.openai.com/v1`    | OpenAI-compatible LLM API endpoint for `extract` and `interact --no-browser`. |
+| `EMBER_LLM_MODEL`         | `gpt-4o-mini`                  | Default model for `extract` and the no-browser interact path. |
 | `EMBER_LIGHTPANDA_PATH`   | _(auto)_                       | Path to a custom Lightpanda binary. Skips auto-download if set. |
 
 ---
