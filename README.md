@@ -73,7 +73,7 @@ ember serve                    # start the REST API
   ███████╗██║ ╚═╝ ██║██████╔╝███████╗██║  ██║
   ╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
 
-  v0.1.0  lightweight headless browser for AI agents
+  v0.1.1  lightweight headless browser for AI agents
 
   Quick Start
   url example.com                          scrape one page
