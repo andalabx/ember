@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish release assets and PyPI"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +47,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -110,6 +119,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release
+    if: github.event_name == 'push' || inputs.publish
     needs: [build, smoke-install]
     runs-on: ubuntu-latest
     steps:
@@ -126,6 +136,7 @@ jobs:
 
   pypi-publish:
     name: Publish to PyPI
+    if: github.event_name == 'push' || inputs.publish
     needs: [build, smoke-install]
     runs-on: ubuntu-latest
     environment:
