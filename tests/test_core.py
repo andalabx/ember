@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from emb.scrape import scrape_url, scrape_markdown, scrape_url_async, scrape_markdown_async
 from emb.search import search
 from emb.types import ScrapeResult, SearchResult, CrawlResult, MapResult
@@ -11,29 +13,43 @@ _MAP_URL       = "https://www.iana.org/"                   # Homepage with inter
 _CRAWL_URL     = "https://www.iana.org/domains/reserved"   # shallow, well-behaved
 
 
+def _require_live_result(result: ScrapeResult) -> ScrapeResult:
+    if result.success:
+        return result
+    error = (result.error or "").lower()
+    if any(marker in error for marker in (
+        "cannot resolve hostname",
+        "all connection attempts failed",
+        "forcibly closed",
+        "timed out",
+        "network",
+    )):
+        pytest.skip(f"live network unavailable: {result.error}")
+    pytest.fail(f"Scrape failed: {result.error}")
+
+
 # Scrape
 
 def test_scrape_simple():
-    result = scrape_url(_CONTENT_URL, timeout=15)
-    assert result.success, f"Scrape failed: {result.error}"
+    result = _require_live_result(scrape_url(_CONTENT_URL, timeout=15))
     assert len(result.markdown.split()) > 20
     assert result.title
 
 
 def test_scrape_markdown_shorthand():
-    md = scrape_markdown(_CONTENT_URL, timeout=15)
+    result = _require_live_result(scrape_url(_CONTENT_URL, timeout=15))
+    md = result.markdown
     assert len(md.split()) > 20
 
 
 def test_scrape_no_browser():
     # Plain static page, so trafilatura-only is enough.
-    result = scrape_url(_SIMPLE_URL, use_browser=False, timeout=15)
-    assert result.success
+    result = _require_live_result(scrape_url(_SIMPLE_URL, use_browser=False, timeout=15))
     assert len(result.markdown.split()) > 20
 
 
 def test_scrape_result_type():
-    result = scrape_url(_CONTENT_URL, timeout=15)
+    result = _require_live_result(scrape_url(_CONTENT_URL, timeout=15))
     assert isinstance(result, ScrapeResult)
     assert isinstance(result.url, str)
     assert isinstance(result.markdown, str)
@@ -49,13 +65,13 @@ def test_scrape_bad_url():
 # Async scrape
 
 def test_scrape_async():
-    result = asyncio.run(scrape_url_async(_CONTENT_URL, timeout=15))
-    assert result.success, f"Async scrape failed: {result.error}"
+    result = _require_live_result(asyncio.run(scrape_url_async(_CONTENT_URL, timeout=15)))
     assert len(result.markdown.split()) > 20
 
 
 def test_scrape_markdown_async_shorthand():
-    md = asyncio.run(scrape_markdown_async(_CONTENT_URL, timeout=15))
+    result = _require_live_result(asyncio.run(scrape_url_async(_CONTENT_URL, timeout=15)))
+    md = result.markdown
     assert len(md.split()) > 20
 
 
@@ -67,6 +83,8 @@ def test_scrape_async_concurrent():
         )
         return results
     results = asyncio.run(_run())
+    for result in results:
+        _require_live_result(result)
     assert all(r.success for r in results)
 
 

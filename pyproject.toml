@@ -12,7 +12,9 @@ requires-python = ">=3.10"
 dependencies = [
     "trafilatura>=2.0.0",
     "beautifulsoup4>=4.12",
+    "soupsieve>=2.6",
     "lxml>=5.0",
+    "lxml_html_clean>=0.4",
     "httpx>=0.28",
     "ddgs>=1.0",
     "typer>=0.15",

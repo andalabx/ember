@@ -8,8 +8,17 @@ import subprocess
 
 import httpx
 import pypdf
-import trafilatura
-from trafilatura.settings import use_config
+try:
+    import trafilatura
+    from trafilatura.settings import use_config
+except Exception as exc:
+    trafilatura = None
+    _TRAFILATURA_IMPORT_ERROR: Exception | None = exc
+    _traf_config = None
+else:
+    _TRAFILATURA_IMPORT_ERROR = None
+    _traf_config = use_config()
+    _traf_config.set("DEFAULT", "EXTRACTION_TIMEOUT", "15")
 
 from emb._http import safe_get, safe_get_async
 from emb._browser import ensure as _ensure_browser
@@ -21,8 +30,6 @@ _MIN_CONTENT_WORDS = 20
 _ROOT_FALLBACK_MAX_WORDS = 220
 _CARDY_MIN_LINES = 6
 _CARDY_MAX_WORDS_PER_LINE = 10
-_traf_config = use_config()
-_traf_config.set("DEFAULT", "EXTRACTION_TIMEOUT", "15")
 
 _JS_APP_MARKERS = (
     "__NEXT_DATA__",
@@ -38,6 +45,15 @@ _JS_APP_MARKERS = (
 
 def _word_count(text: str) -> int:
     return len(text.split())
+
+
+def _trafilatura_error() -> str | None:
+    if _TRAFILATURA_IMPORT_ERROR is None:
+        return None
+    text = str(_TRAFILATURA_IMPORT_ERROR)
+    if "lxml_html_clean" in text or "lxml.html.clean" in text:
+        return "Scrape dependencies are incomplete. Install lxml_html_clean or upgrade ember-browser."
+    return f"Scrape dependencies are unavailable: {text}"
 
 
 def _markdown_quality_score(text: str) -> int:
@@ -219,6 +235,9 @@ async def scrape_markdown_async(
 
 
 def _scrape_trafilatura(url: str, timeout: int) -> ScrapeResult:
+    dep_error = _trafilatura_error()
+    if dep_error:
+        return ScrapeResult(url=url, markdown="", success=False, error=dep_error)
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = safe_get(client, url)
@@ -251,6 +270,9 @@ def _scrape_pdf(url: str, data: bytes) -> ScrapeResult:
 
 
 def _scrape_html(url: str, html: str) -> ScrapeResult:
+    dep_error = _trafilatura_error()
+    if dep_error:
+        return ScrapeResult(url=url, markdown="", success=False, error=dep_error)
     if html.lstrip()[:5] == "%PDF-":
         return ScrapeResult(url=url, markdown="", success=False,
                             error="Received PDF as text — cannot extract")

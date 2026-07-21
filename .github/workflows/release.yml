@@ -31,9 +31,86 @@ jobs:
           name: dist
           path: dist/
 
+  smoke-install:
+    name: Smoke Install (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install wheel in a fresh venv
+        if: runner.os != 'Windows'
+        run: |
+          python -m venv .venv-smoke
+          .venv-smoke/bin/python -m pip install --upgrade pip
+          .venv-smoke/bin/pip install dist/*.whl
+
+      - name: Install wheel in a fresh venv
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv-smoke
+          .\.venv-smoke\Scripts\python.exe -m pip install --upgrade pip
+          $wheel = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          .\.venv-smoke\Scripts\pip.exe install $wheel
+
+      - name: Smoke check installed CLI
+        if: runner.os != 'Windows'
+        run: |
+          .venv-smoke/bin/ember version > smoke-version.txt
+          grep -q "ember v" smoke-version.txt
+
+      - name: Smoke check installed CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\.venv-smoke\Scripts\ember.exe version | Out-File smoke-version.txt -Encoding utf8
+          Select-String -Path smoke-version.txt -Pattern "ember v" | Out-Null
+
+      - name: Smoke check installed scrape path
+        if: runner.os != 'Windows'
+        run: |
+          for attempt in 1 2 3; do
+            if .venv-smoke/bin/ember url https://example.com > smoke-url.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 3
+          done
+          grep -q "Example Domain" smoke-url.txt
+
+      - name: Smoke check installed scrape path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              .\.venv-smoke\Scripts\ember.exe url https://example.com | Out-File smoke-url.txt -Encoding utf8
+              break
+            } catch {
+              if ($attempt -eq 3) { throw }
+              Start-Sleep -Seconds 3
+            }
+          }
+          Select-String -Path smoke-url.txt -Pattern "Example Domain" | Out-Null
+
   github-release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, smoke-install]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -49,7 +126,7 @@ jobs:
 
   pypi-publish:
     name: Publish to PyPI
-    needs: build
+    needs: [build, smoke-install]
     runs-on: ubuntu-latest
     environment:
       name: pypi

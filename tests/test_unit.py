@@ -76,6 +76,15 @@ class TestScrapeHtml:
 # _scrape_trafilatura
 
 class TestScrapeTrafilatura:
+    def test_missing_scrape_dependency_returns_human_error(self):
+        from emb.scrape import _scrape_trafilatura
+
+        with patch("emb.scrape._TRAFILATURA_IMPORT_ERROR", ImportError("lxml.html.clean module requires lxml_html_clean")):
+            result = _scrape_trafilatura("https://example.com", timeout=10)
+
+        assert result.success is False
+        assert "lxml_html_clean" in result.error
+
     def test_http_error_marks_failure(self):
         from unittest.mock import MagicMock
         from emb.scrape import _scrape_trafilatura

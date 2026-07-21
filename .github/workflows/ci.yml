@@ -8,12 +8,22 @@ on:
 
 jobs:
   test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }} / Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
@@ -28,3 +38,82 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -q --tb=short
+
+  smoke-install:
+    name: Smoke Install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build
+        run: pip install build
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Install wheel in a fresh venv
+        if: runner.os != 'Windows'
+        run: |
+          python -m venv .venv-smoke
+          .venv-smoke/bin/python -m pip install --upgrade pip
+          .venv-smoke/bin/pip install dist/*.whl
+
+      - name: Install wheel in a fresh venv
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv-smoke
+          .\.venv-smoke\Scripts\python.exe -m pip install --upgrade pip
+          $wheel = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          .\.venv-smoke\Scripts\pip.exe install $wheel
+
+      - name: Smoke check installed CLI
+        if: runner.os != 'Windows'
+        run: |
+          .venv-smoke/bin/ember version > smoke-version.txt
+          grep -q "ember v" smoke-version.txt
+
+      - name: Smoke check installed CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\.venv-smoke\Scripts\ember.exe version | Out-File smoke-version.txt -Encoding utf8
+          Select-String -Path smoke-version.txt -Pattern "ember v" | Out-Null
+
+      - name: Smoke check installed scrape path
+        if: runner.os != 'Windows'
+        run: |
+          for attempt in 1 2 3; do
+            if .venv-smoke/bin/ember url https://example.com > smoke-url.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 3
+          done
+          grep -q "Example Domain" smoke-url.txt
+
+      - name: Smoke check installed scrape path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              .\.venv-smoke\Scripts\ember.exe url https://example.com | Out-File smoke-url.txt -Encoding utf8
+              break
+            } catch {
+              if ($attempt -eq 3) { throw }
+              Start-Sleep -Seconds 3
+            }
+          }
+          Select-String -Path smoke-url.txt -Pattern "Example Domain" | Out-Null

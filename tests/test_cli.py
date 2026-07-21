@@ -466,3 +466,12 @@ class TestSession:
         assert "Browse" in result.output
         assert "Outside Session" in result.output
         assert "config --save-dir ./out" in result.output
+
+    def test_session_url_dependency_error_stays_human(self):
+        with patch("emb.scrape._TRAFILATURA_IMPORT_ERROR", ImportError("lxml.html.clean module requires lxml_html_clean")), \
+             patch("emb.scrape.validate_url"):
+            result = runner.invoke(app, [], input="url example.com\nquit\n")
+
+        assert result.exit_code == 0
+        assert "lxml_html_clean" in result.output
+        assert "Traceback" not in result.output
