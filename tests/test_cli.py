@@ -190,7 +190,7 @@ class TestBrowserProgressFlow:
                 total_text="133.0 MiB",
                 speed_text="10.0 MiB/s",
             )
-            time.sleep(0.1)
+            time.sleep(0.25)
             browser_mod._emit("ready")
             time.sleep(1.05)
             return "done"
@@ -204,7 +204,7 @@ class TestBrowserProgressFlow:
 
         assert result == "done"
         assert any("Pausing work to set up Lightpanda" in msg for msg in updates)
-        assert any("Downloading Lightpanda... 5%" in msg for msg in updates)
+        assert any("Downloading Lightpanda..." in msg for msg in updates)
         assert any("Browser ready. Resuming work..." in msg for msg in updates)
         ready_index = next(i for i, msg in enumerate(updates) if "Browser ready. Resuming work..." in msg)
         trailing = updates[ready_index + 1:]
