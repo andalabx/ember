@@ -82,7 +82,7 @@ tests/
 
 ## Key design decisions
 
-- **Lightpanda over Chromium**: 20 MB vs 641 MB. Runs without a display server.
+- **Lightpanda over Chromium**: about 63-138 MiB first download vs a much larger full Chromium stack. Runs without a display server.
 - **trafilatura for tier 1**: handles ~90% of pages with zero browser overhead.
 - **Single fetch per page**: `crawl.py` fetches HTML once and reuses it for both content extraction and link discovery.
 - **SSRF protection**: `_url_validator.py` blocks RFC 1918, loopback, and link-local ranges before any outbound request in the API layer.
@@ -90,7 +90,7 @@ tests/
 - **Lazy auto-download**: The Lightpanda binary downloads on first use, verified with SHA-256, then cached. No user action required.
 - **Session-first CLI**: `ember` with no arguments launches the interactive REPL (`session()`). One-shot commands still work directly (`ember url ...`). Startup shows a short quick start, and `help` shows the full guide.
 - **Persistent save config**: `ember config --save-dir <path>` writes to `~/.config/ember/config.json`. `EMBER_SAVE_DIR` env var overrides it for the current shell. When neither is set, CLI results default to `./ember_results`. All commands use `_resolve_save()` to apply the right path with explicit `-o` taking highest priority.
-- **Clean-on-display markdown**: `_clean_scraped_md()` is applied to all scraped content before panel rendering. Trafilatura converts multi-column page layouts to pipe-delimited markdown tables; those scatter visibly in narrow terminals. The cleaner joins cells into readable prose and removes separator rows — the raw `.markdown` field on `ScrapeResult` is never mutated.
+- **Clean-on-display markdown**: `_clean_scraped_md()` is applied to all scraped content before panel rendering. Trafilatura converts multi-column page layouts to pipe-delimited markdown tables; those scatter visibly in narrow terminals. The cleaner joins cells into readable prose and removes separator rows - the raw `.markdown` field on `ScrapeResult` is never mutated.
 - **Tree-grouped URL display**: `_display_links()` groups map results by first path segment and renders them as a Rich `Tree`. A flat dump of 200+ URLs is unusable; grouping makes site structure immediately readable.
 - **Windows VT processing**: `cli.py` calls `SetConsoleMode` via `ctypes` at import time on `sys.platform == "win32"`. PowerShell 5.1 does not enable Virtual Terminal Processing for child processes, so ANSI colour codes appear as literal `←[` without this. The call is wrapped in a try/except so it never breaks non-console environments (pipes, CI).
 

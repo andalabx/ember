@@ -1070,6 +1070,23 @@ def _session_run(line: str, state: dict) -> dict:
             console.print(f"  [green]✓[/green] output → [orange1]{d}[/orange1]  [bright_black](all results auto-saved here)[/bright_black]")
         return state
 
+    if cmd == "browser":
+        sub = rest[0].lower() if rest else "status"
+        if sub == "status":
+            _browser_status_action()
+            return state
+        if sub == "install":
+            _browser_install_action()
+            return state
+        if sub == "path":
+            _browser_path_action()
+            return state
+        if sub == "clear":
+            _browser_clear_action()
+            return state
+        _err("Usage: browser <status|install|path|clear>")
+        return state
+
     # Url
     if cmd == "url":
         if not rest:
@@ -1429,6 +1446,11 @@ def mcp():
     start_mcp()
 
 
+@app.command("help", help="Show the full command guide.")
+def help_command() -> None:
+    _print_session_help()
+
+
 @app.command(help="Show the version.")
 def version():
     console.print(f"  ember [orange1]v{__version__}[/orange1]")
@@ -1494,3 +1516,83 @@ def browser_clear() -> None:
     console.print(
         f"\n  [bright_black]no cached browser at {_browser.BINARY_PATH}[/bright_black]\n"
     )
+
+
+def _browser_status_action() -> None:
+    from emb import _browser
+
+    _print_browser_status(_browser.status())
+
+
+def _browser_install_action() -> bool:
+    from emb import _browser
+
+    info = _browser.status()
+    if info.get("available"):
+        console.print()
+        console.print(f"  [green]ok[/green] browser ready -> [orange1]{info['path']}[/orange1]\n")
+        return True
+
+    try:
+        path = _run_with_steps(
+            _browser.ensure,
+            [
+                "Checking browser runtime...",
+                "Preparing browser setup...",
+            ],
+            interval=1.0,
+        )
+    except RuntimeError as exc:
+        _err(str(exc))
+        return False
+
+    console.print()
+    console.print(f"  [green]ok[/green] browser ready -> [orange1]{path}[/orange1]\n")
+    return True
+
+
+def _browser_path_action() -> bool:
+    from emb import _browser
+
+    info = _browser.status()
+    if not info.get("available"):
+        _err("Browser not ready", info.get("hint", "run `ember browser install` first"))
+        return False
+    console.print(f"\n  [orange1]{info['path']}[/orange1]\n")
+    return True
+
+
+def _browser_clear_action() -> None:
+    from emb import _browser
+
+    removed = _browser.clear_cache()
+    if removed:
+        console.print(
+            f"\n  [green]ok[/green] cleared cached browser -> "
+            f"[orange1]{_browser.BINARY_PATH}[/orange1]\n"
+        )
+        return
+    console.print(
+        f"\n  [bright_black]no cached browser at {_browser.BINARY_PATH}[/bright_black]\n"
+    )
+
+
+def _browser_install_callback() -> None:
+    if not _browser_install_action():
+        raise typer.Exit(1)
+
+
+def _browser_path_callback() -> None:
+    if not _browser_path_action():
+        raise typer.Exit(1)
+
+
+for _command in browser_app.registered_commands:
+    if _command.name == "status":
+        _command.callback = _browser_status_action
+    elif _command.name == "install":
+        _command.callback = _browser_install_callback
+    elif _command.name == "path":
+        _command.callback = _browser_path_callback
+    elif _command.name == "clear":
+        _command.callback = _browser_clear_action

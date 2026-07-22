@@ -64,6 +64,15 @@ class TestVersion:
         assert "ember v0.1.2" in result.output
 
 
+class TestHelp:
+    def test_help_command_shows_full_guide(self):
+        result = runner.invoke(app, ["help"])
+
+        assert result.exit_code == 0
+        assert "Browse" in result.output
+        assert "Saving" in result.output
+
+
 class TestCmdBrowser:
     def test_browser_status_shows_ready(self):
         browser_info = {
@@ -131,6 +140,27 @@ class TestCmdBrowser:
 
         assert result.exit_code == 0
         assert "cleared cached browser" in result.output
+
+    def test_browser_install_runtime_error_stays_human(self):
+        browser_info = {
+            "available": False,
+            "path": None,
+            "source": None,
+            "cache_path": "/tmp/lightpanda",
+            "platform": "Windows",
+            "machine": "AMD64",
+            "download_size_bytes": None,
+            "supported": False,
+            "error": "",
+            "hint": "Browser features need Linux or WSL2.",
+        }
+        with patch("emb._browser.status", return_value=browser_info), \
+             patch("emb._browser.ensure", side_effect=RuntimeError("Browser features need Linux or WSL2.")):
+            result = runner.invoke(app, ["browser", "install"])
+
+        assert result.exit_code == 1
+        assert "Browser features need Linux or WSL2." in result.output
+        assert "Traceback" not in result.output
 
 
 class TestBrowserProgressFlow:
@@ -587,6 +617,26 @@ class TestSession:
         assert "Browse" in result.output
         assert "Outside Session" in result.output
         assert "config --save-dir ./out" in result.output
+
+    def test_session_browser_status_works(self):
+        browser_info = {
+            "available": False,
+            "path": None,
+            "source": None,
+            "cache_path": "/tmp/lightpanda",
+            "platform": "Windows",
+            "machine": "AMD64",
+            "download_size_bytes": None,
+            "supported": False,
+            "error": "",
+            "hint": "Browser features need Linux or WSL2.",
+        }
+        with patch("emb._browser.status", return_value=browser_info):
+            result = runner.invoke(app, [], input="browser status\nquit\n")
+
+        assert result.exit_code == 0
+        assert "browser" in result.output
+        assert "not ready" in result.output
 
     def test_session_url_dependency_error_stays_human(self):
         with patch("emb.scrape._TRAFILATURA_IMPORT_ERROR", ImportError("lxml.html.clean module requires lxml_html_clean")), \

@@ -84,7 +84,7 @@ def start_mcp():
 
         ok = [r for r in results if r.success]
         fail = [r for r in results if not r.success]
-        out = [f"Scraped {len(results)} URLs — {len(ok)} ok, {len(fail)} failed\n"]
+        out = [f"Scraped {len(results)} URLs - {len(ok)} ok, {len(fail)} failed\n"]
         for r in ok:
             snippet = r.markdown[:500] + ("..." if len(r.markdown) > 500 else "")
             out.append(f"## {r.title or r.url}\nURL: {r.url}\n\n{snippet}\n")
