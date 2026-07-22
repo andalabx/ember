@@ -61,7 +61,7 @@ class TestVersion:
     def test_version_prints_version_string(self):
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
-        assert "ember v0.1.2" in result.output
+        assert "ember v0.1.3" in result.output
 
 
 class TestHelp:
