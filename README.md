@@ -25,6 +25,10 @@ pip install ember-browser
 
 ![ember demo](https://i.imgur.com/dFkRJYj.gif)
 
+## Windows support
+
+Browser features need Linux or WSL2. Scrape, search, crawl, map, API, and MCP work on Windows.
+
 ---
 
 ## Why ember
