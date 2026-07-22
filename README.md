@@ -35,9 +35,9 @@ ember runs at ~17 MB idle. It decides whether a page needs a browser — you jus
 
 |                          | ember                  | Crawl4AI               | Firecrawl OSS          | Playwright             |
 |--------------------------|------------------------|------------------------|------------------------|------------------------|
-| Setup                    | `pip install`          | `pip install`          | Docker + Redis + Node  | `pip` + browser install|
+| Setup                    | `pip install` + optional `ember browser install` | `pip install`          | Docker + Redis + Node  | `pip` + browser install|
 | Package size             | ~54 MB                 | ~200–350 MB            | Thin client only       | ~47 MB                 |
-| Browser binary           | Lightpanda ~12 MB      | Chromium ~281 MB       | Chromium ~281 MB       | Chromium ~281 MB       |
+| Browser binary           | Lightpanda ~63-138 MiB on first browser use | Chromium ~281 MB       | Chromium ~281 MB       | Chromium ~281 MB       |
 | Docker required          | No                     | No                     | Yes                    | No                     |
 | API key required         | No                     | No                     | No                     | No                     |
 | MCP server               | Yes                    | No                     | Yes                    | Yes                    |
@@ -297,7 +297,13 @@ Not every page needs a browser. ember knows the difference.
 
 **Tier 1 — trafilatura** handles ~89% of the web: blogs, news, documentation, docs sites, GitHub. Pure HTTP, no browser process, no memory overhead.
 
-**Tier 2 — Lightpanda** handles JavaScript-heavy pages, SPAs, and interactive content. It's a real browser engine written in Zig, built for machines rather than humans — 20 MB total. ember downloads and caches it automatically on first use, and only falls back to it when tier 1 produces thin content.
+**Tier 2 — Lightpanda** handles JavaScript-heavy pages, SPAs, and interactive content. It's a real browser engine written in Zig, built for machines rather than humans. ember downloads and caches it automatically the first time browser mode is needed, shows download progress, and then reuses the cached binary on later runs. You can also preinstall it with `ember browser install`.
+
+Current first-download size depends on platform:
+- Linux x86_64: about 133 MiB
+- Linux arm64: about 138 MiB
+- macOS x86_64: about 66 MiB
+- macOS arm64: about 63 MiB
 
 Most requests never reach the browser.
 

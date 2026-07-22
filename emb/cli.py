@@ -54,6 +54,8 @@ app = typer.Typer(
     no_args_is_help=False,
     invoke_without_command=True,
 )
+browser_app = typer.Typer(help="Manage the Lightpanda browser runtime.")
+app.add_typer(browser_app, name="browser")
 
 
 # Config
@@ -271,6 +273,9 @@ _SESSION_ACTIONS: list[tuple[str, str]] = [
 ]
 
 _SESSION_ADMIN: list[tuple[str, str]] = [
+    ("browser status", "show browser runtime status"),
+    ("browser install", "download Lightpanda now"),
+    ("browser clear", "remove cached browser"),
     ("config", "show current config"),
     ("config --save-dir ./out", "set default save folder"),
     ("version", "show ember version"),
@@ -360,9 +365,69 @@ def _print_result(body: str, title: str = "", subtitle: str = "") -> None:
         console.print(body)
 
 
+def _browser_step_message(event: str, data: dict[str, Any]) -> str | None:
+    if event == "download_needed":
+        size = data.get("size_text") or "browser package"
+        return (
+            f"Browser mode needed once. Pausing work to set up Lightpanda "
+            f"({size})..."
+        )
+    if event == "download_progress":
+        percent = data.get("percent")
+        downloaded = data.get("downloaded_text") or "0 B"
+        total = data.get("total_text") or "?"
+        speed = data.get("speed_text") or "0 B/s"
+        if percent is None:
+            return f"Downloading Lightpanda... {downloaded} at {speed}"
+        return f"Downloading Lightpanda... {percent}% ({downloaded} / {total}, {speed})"
+    if event == "verifying":
+        return "Verifying Lightpanda download..."
+    if event == "ready":
+        return "Browser ready. Resuming work..."
+    return None
+
+
+def _print_browser_status(info: dict[str, Any]) -> None:
+    source = info.get("source") or "not installed"
+    source_map = {
+        "env": "EMBER_LIGHTPANDA_PATH",
+        "path": "PATH",
+        "cache": "cache",
+        "not installed": "not installed",
+    }
+    size_bytes = info.get("download_size_bytes")
+    size_text = ""
+    if isinstance(size_bytes, int) and size_bytes > 0:
+        size_text = f"{size_bytes / (1024 * 1024):.1f} MiB"
+
+    console.print("\n  [bold]browser[/bold]\n")
+    if info.get("available"):
+        console.print("  [green]✓[/green] [white]ready[/white]")
+        console.print(f"  [bright_black]source:[/bright_black] [white]{source_map.get(source, source)}[/white]")
+        console.print(f"  [bright_black]path:[/bright_black] [orange1]{info['path']}[/orange1]")
+    else:
+        console.print("  [yellow]![/yellow] [white]not ready[/white]")
+        console.print(f"  [bright_black]source:[/bright_black] [white]{source_map.get(source, source)}[/white]")
+    console.print(
+        f"  [bright_black]platform:[/bright_black] "
+        f"[white]{info['platform']} {info['machine']}[/white]"
+    )
+    console.print(f"  [bright_black]cache:[/bright_black] [white]{info['cache_path']}[/white]")
+    if size_text:
+        console.print(f"  [bright_black]first download:[/bright_black] [white]{size_text}[/white]")
+    if info.get("error"):
+        console.print(f"  [red]×[/red] {info['error']}")
+    if info.get("hint"):
+        console.print(f"  [bright_black]hint:[/bright_black] {info['hint']}")
+    console.print()
+
+
 def _run_with_steps(fn: Callable[[], Any], steps: list[str], interval: float = 0.8) -> Any:
+    from emb import _browser as _browser_mod
+
     result: dict[str, Any] = {}
     error: dict[str, BaseException] = {}
+    browser_state: dict[str, Any] = {"message": "", "clear_at": 0.0}
 
     def _worker() -> None:
         try:
@@ -370,19 +435,33 @@ def _run_with_steps(fn: Callable[[], Any], steps: list[str], interval: float = 0
         except BaseException as exc:
             error["value"] = exc
 
-    thread = threading.Thread(target=_worker, daemon=True)
-    thread.start()
+    def _browser_progress(event: str, data: dict[str, Any]) -> None:
+        message = _browser_step_message(event, data)
+        if message:
+            browser_state["message"] = message
+            browser_state["clear_at"] = time.monotonic() + 0.9 if event == "ready" else 0.0
 
-    index = 0
-    next_tick = time.monotonic()
-    with console.status(f"[white]{steps[0]}[/white]") as status:
-        while thread.is_alive():
-            now = time.monotonic()
-            if now >= next_tick:
-                status.update(f"[white]{steps[index % len(steps)]}[/white]")
-                index += 1
-                next_tick = now + interval
-            thread.join(timeout=0.1)
+    with _browser_mod.report_progress(_browser_progress):
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
+
+        index = 0
+        next_tick = time.monotonic()
+        with console.status(f"[white]{steps[0]}[/white]") as status:
+            while thread.is_alive():
+                now = time.monotonic()
+                clear_at = browser_state.get("clear_at", 0.0)
+                if clear_at and now >= clear_at:
+                    browser_state["message"] = ""
+                    browser_state["clear_at"] = 0.0
+                message = browser_state.get("message")
+                if message:
+                    status.update(f"[white]{message}[/white]")
+                elif now >= next_tick:
+                    status.update(f"[white]{steps[index % len(steps)]}[/white]")
+                    index += 1
+                    next_tick = now + interval
+                thread.join(timeout=0.1)
 
     if "value" in error:
         raise error["value"]
@@ -1353,3 +1432,65 @@ def mcp():
 @app.command(help="Show the version.")
 def version():
     console.print(f"  ember [orange1]v{__version__}[/orange1]")
+
+
+@browser_app.callback(invoke_without_command=True)
+def browser_main(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        browser_status()
+
+
+@browser_app.command("status", help="Show browser runtime status.")
+def browser_status() -> None:
+    from emb import _browser
+
+    _print_browser_status(_browser.status())
+
+
+@browser_app.command("install", help="Download and cache Lightpanda now.")
+def browser_install() -> None:
+    from emb import _browser
+
+    info = _browser.status()
+    if info.get("available"):
+        console.print()
+        console.print(f"  [green]✓[/green] browser ready → [orange1]{info['path']}[/orange1]\n")
+        return
+
+    path = _run_with_steps(
+        _browser.ensure,
+        [
+            "Checking browser runtime...",
+            "Preparing browser setup...",
+        ],
+        interval=1.0,
+    )
+    console.print()
+    console.print(f"  [green]✓[/green] browser ready → [orange1]{path}[/orange1]\n")
+
+
+@browser_app.command("path", help="Show the resolved browser binary path.")
+def browser_path() -> None:
+    from emb import _browser
+
+    info = _browser.status()
+    if not info.get("available"):
+        _err("Browser not ready", info.get("hint", "run `ember browser install` first"))
+        raise typer.Exit(1)
+    console.print(f"\n  [orange1]{info['path']}[/orange1]\n")
+
+
+@browser_app.command("clear", help="Remove the cached browser binary.")
+def browser_clear() -> None:
+    from emb import _browser
+
+    removed = _browser.clear_cache()
+    if removed:
+        console.print(
+            f"\n  [green]✓[/green] cleared cached browser → "
+            f"[orange1]{_browser.BINARY_PATH}[/orange1]\n"
+        )
+        return
+    console.print(
+        f"\n  [bright_black]no cached browser at {_browser.BINARY_PATH}[/bright_black]\n"
+    )

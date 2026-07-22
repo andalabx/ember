@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -61,6 +62,126 @@ class TestVersion:
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
         assert "ember v0.1.2" in result.output
+
+
+class TestCmdBrowser:
+    def test_browser_status_shows_ready(self):
+        browser_info = {
+            "available": True,
+            "path": "/tmp/lightpanda",
+            "source": "cache",
+            "cache_path": "/tmp/lightpanda",
+            "platform": "Linux",
+            "machine": "x86_64",
+            "download_size_bytes": 139_469_968,
+            "supported": True,
+            "error": "",
+            "hint": "",
+        }
+        with patch("emb._browser.status", return_value=browser_info):
+            result = runner.invoke(app, ["browser", "status"])
+
+        assert result.exit_code == 0
+        assert "ready" in result.output
+        assert "/tmp/lightpanda" in result.output
+
+    def test_browser_install_calls_ensure(self):
+        browser_info = {
+            "available": False,
+            "path": None,
+            "source": None,
+            "cache_path": "/tmp/lightpanda",
+            "platform": "Linux",
+            "machine": "x86_64",
+            "download_size_bytes": 139_469_968,
+            "supported": True,
+            "error": "",
+            "hint": "",
+        }
+        with patch("emb._browser.status", return_value=browser_info), \
+             patch("emb._browser.ensure", return_value="/tmp/lightpanda"):
+            result = runner.invoke(app, ["browser", "install"])
+
+        assert result.exit_code == 0
+        assert "/tmp/lightpanda" in result.output
+
+    def test_browser_path_requires_ready_browser(self):
+        browser_info = {
+            "available": False,
+            "path": None,
+            "source": None,
+            "cache_path": "/tmp/lightpanda",
+            "platform": "Linux",
+            "machine": "x86_64",
+            "download_size_bytes": 139_469_968,
+            "supported": True,
+            "error": "",
+            "hint": "Run `ember browser install` to download Lightpanda once.",
+        }
+        with patch("emb._browser.status", return_value=browser_info):
+            result = runner.invoke(app, ["browser", "path"])
+
+        assert result.exit_code == 1
+        assert "Browser not ready" in result.output
+
+    def test_browser_clear_reports_removed_cache(self):
+        with patch("emb._browser.clear_cache", return_value=True), \
+             patch("emb._browser.BINARY_PATH", Path("/tmp/lightpanda")):
+            result = runner.invoke(app, ["browser", "clear"])
+
+        assert result.exit_code == 0
+        assert "cleared cached browser" in result.output
+
+
+class TestBrowserProgressFlow:
+    def test_run_with_steps_pauses_for_browser_setup_then_resumes_work(self):
+        import emb._browser as browser_mod
+        import emb.cli as cli_mod
+
+        updates: list[str] = []
+
+        class FakeStatus:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def update(self, message: str) -> None:
+                updates.append(message)
+
+        def fake_work() -> str:
+            browser_mod._emit("download_needed", size_text="133.0 MiB")
+            time.sleep(0.1)
+            browser_mod._emit(
+                "download_progress",
+                percent=5,
+                downloaded_text="6.0 MiB",
+                total_text="133.0 MiB",
+                speed_text="10.0 MiB/s",
+            )
+            time.sleep(0.1)
+            browser_mod._emit("ready")
+            time.sleep(1.05)
+            return "done"
+
+        with patch.object(cli_mod.console, "status", return_value=FakeStatus()):
+            result = cli_mod._run_with_steps(
+                fake_work,
+                ["Working on https://example.com", "Fetching page..."],
+                interval=0.05,
+            )
+
+        assert result == "done"
+        assert any("Pausing work to set up Lightpanda" in msg for msg in updates)
+        assert any("Downloading Lightpanda... 5%" in msg for msg in updates)
+        assert any("Browser ready. Resuming work..." in msg for msg in updates)
+        ready_index = next(i for i, msg in enumerate(updates) if "Browser ready. Resuming work..." in msg)
+        trailing = updates[ready_index + 1:]
+        assert any(
+            "Working on https://example.com" in msg or "Fetching page..." in msg
+            for msg in trailing
+        )
 
 
 # serve
