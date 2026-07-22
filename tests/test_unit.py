@@ -877,8 +877,11 @@ class TestBrowserIsAvailable:
 
         fake = tmp_path / "lightpanda"
         fake.write_bytes(b"ELF")
+        mock_run = MagicMock()
+        mock_run.returncode = 0
 
-        with patch.object(_browser, "BINARY_PATH", fake):
+        with patch.object(_browser, "BINARY_PATH", fake), \
+             patch("emb._browser.subprocess.run", return_value=mock_run):
             result = _browser.is_available()
 
         assert result is True
@@ -894,6 +897,54 @@ class TestBrowserIsAvailable:
             result = _browser.is_available()
 
         assert result is False
+
+
+class TestBrowserStatus:
+    def test_status_reports_cached_binary(self, tmp_path):
+        from emb import _browser
+
+        fake = tmp_path / "lightpanda"
+        fake.write_bytes(b"ELF")
+
+        mock_run = MagicMock()
+        mock_run.returncode = 0
+
+        with patch.object(_browser, "BINARY_PATH", fake), \
+             patch("emb._browser.subprocess.run", return_value=mock_run):
+            info = _browser.status()
+
+        assert info["available"] is True
+        assert info["source"] == "path" or info["source"] == "cache"
+
+    def test_status_reports_invalid_env_hint(self):
+        from emb import _browser
+
+        with patch.dict("os.environ", {"EMBER_LIGHTPANDA_PATH": "/missing/lightpanda"}):
+            info = _browser.status()
+
+        assert info["available"] is False
+        assert info["source"] == "env"
+        assert "unset" in info["hint"].lower()
+
+
+class TestBrowserClearCache:
+    def test_clear_cache_removes_binary_and_tmp(self, tmp_path):
+        from emb import _browser
+
+        cache_dir = tmp_path / "ember-cache"
+        cache_dir.mkdir()
+        binary = cache_dir / "lightpanda"
+        tmp = cache_dir / "lightpanda.tmp"
+        binary.write_bytes(b"ELF")
+        tmp.write_bytes(b"tmp")
+
+        with patch.object(_browser, "CACHE_DIR", cache_dir), \
+             patch.object(_browser, "BINARY_PATH", binary):
+            removed = _browser.clear_cache()
+
+        assert removed is True
+        assert not binary.exists()
+        assert not tmp.exists()
 
 
 # validate_url
@@ -1193,7 +1244,7 @@ class TestCrawl:
         scrape_result = ScrapeResult(url="https://example.com", markdown=_RICH_TEXT, success=True)
 
         call_urls = []
-        def fake_get(url, **kwargs):
+        def fake_get(client, url, **kwargs):
             call_urls.append(url)
             r = MagicMock()
             r.status_code = 200
@@ -1203,9 +1254,9 @@ class TestCrawl:
         with patch("emb.crawl.validate_url"), \
              patch("emb.crawl._find_sitemaps", return_value=[]), \
              patch("emb.crawl._scrape_html", return_value=scrape_result), \
+             patch("emb.crawl.safe_get", side_effect=fake_get), \
              patch("emb.crawl.httpx.Client") as MockClient:
             mock_client = MagicMock()
-            mock_client.get.side_effect = fake_get
             MockClient.return_value.__enter__.return_value = mock_client
             MockClient.return_value.__exit__.return_value = False
             crawl("https://example.com", max_pages=5, max_depth=1,

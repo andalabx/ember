@@ -20,8 +20,14 @@ def _require_live_result(result: ScrapeResult) -> ScrapeResult:
     if any(marker in error for marker in (
         "cannot resolve hostname",
         "all connection attempts failed",
+        "connection attempt failed",
+        "connecterror",
+        "failed to respond",
         "forcibly closed",
+        "connecttimeout",
+        "readtimeout",
         "timed out",
+        "winerror 10060",
         "network",
     )):
         pytest.skip(f"live network unavailable: {result.error}")

@@ -47,6 +47,13 @@ def _word_count(text: str) -> int:
     return len(text.split())
 
 
+def _fetch_error(exc: Exception) -> str:
+    text = str(exc).strip()
+    if not text:
+        text = exc.__class__.__name__
+    return f"fetch: {text}"
+
+
 def _trafilatura_error() -> str | None:
     if _TRAFILATURA_IMPORT_ERROR is None:
         return None
@@ -204,7 +211,7 @@ async def scrape_url_async(
                 else:
                     html = resp.text
     except Exception as e:
-        return ScrapeResult(url=url, markdown="", success=False, error=f"fetch: {e}")
+        return ScrapeResult(url=url, markdown="", success=False, error=_fetch_error(e))
 
     if pdf_bytes is not None:
         return _scrape_pdf(url, pdf_bytes)
@@ -248,7 +255,7 @@ def _scrape_trafilatura(url: str, timeout: int) -> ScrapeResult:
             return _scrape_pdf(url, resp.content)
         return _scrape_html(url, resp.text)
     except Exception as e:
-        return ScrapeResult(url=url, markdown="", success=False, error=f"fetch: {e}")
+        return ScrapeResult(url=url, markdown="", success=False, error=_fetch_error(e))
 
 
 def _scrape_pdf(url: str, data: bytes) -> ScrapeResult:

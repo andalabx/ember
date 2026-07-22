@@ -46,7 +46,10 @@ Source = "https://github.com/andalabx/ember"
 ember = "emb.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "httpx2>=2.7",
+]
 mcp = ["fastmcp>=2.0"]
 
 [build-system]
