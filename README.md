@@ -93,6 +93,7 @@ ember › url andalabx.com
 ember › help
 ember › output ./research
 ember › search "python asyncio" -n 10
+ember › search "python asyncio" --backend yahoo
 ember › output clear
 ember › quit
 </pre>
@@ -104,6 +105,7 @@ Every command works standalone too:
 ```bash
 ember url https://example.com                         # scrape a page
 ember search "AI agents python" -n 10                 # web search
+ember search "AI agents python" --backend yahoo,brave # choose engines, tried in order
 ember crawl https://docs.example.com --max-pages 20   # crawl a site
 ember map https://example.com                         # discover all URLs
 ember interact https://amazon.com \
@@ -188,6 +190,7 @@ print(result.links)   # list[str]
 
 # Search the web
 results = search("python asyncio tutorial", limit=5)
+results = search("python asyncio tutorial", backend="yahoo,brave")   # pick engines
 for r in results:
     print(r.title, r.url)
 

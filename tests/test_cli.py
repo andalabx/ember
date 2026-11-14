@@ -302,6 +302,37 @@ class TestCmdSearch:
         assert "python" in result.output
 
 
+class TestCmdSearchBackend:
+    def test_backend_option_is_passed_through(self):
+        with patch("emb.search.search", return_value=_search_results()) as mock_search:
+            result = runner.invoke(app, ["search", "python", "--backend", "yahoo,brave"])
+
+        assert result.exit_code == 0
+        assert mock_search.call_args.kwargs["backend"] == "yahoo,brave"
+
+    def test_backend_defaults_to_none(self):
+        with patch("emb.search.search", return_value=_search_results()) as mock_search:
+            runner.invoke(app, ["search", "python"])
+
+        assert mock_search.call_args.kwargs["backend"] is None
+
+    def test_unknown_backend_is_a_clear_error_without_network_hint(self):
+        result = runner.invoke(app, ["search", "python", "--backend", "bing"])
+
+        assert result.exit_code == 1
+        assert "Unknown search backend" in result.output
+        assert "internet" not in result.output
+
+    def test_all_engines_failed_hints_at_backend_flag(self):
+        err = RuntimeError("Search failed on all engines - brave: no results")
+        with patch("emb.search.search", side_effect=err):
+            result = runner.invoke(app, ["search", "python"])
+
+        assert result.exit_code == 1
+        assert "brave: no results" in result.output
+        assert "--backend" in result.output
+
+
 # crawl
 
 class TestCmdCrawl:
@@ -637,6 +668,35 @@ class TestSession:
         assert result.exit_code == 0
         assert "browser" in result.output
         assert "not ready" in result.output
+
+    def test_session_search_passes_backend_flag(self):
+        with patch("emb.search.search", return_value=_search_results()) as mock_search:
+            result = runner.invoke(app, [], input="search python -n 3 --backend yahoo,brave\nquit\n")
+
+        assert result.exit_code == 0
+        assert "Result A" in result.output
+        kwargs = mock_search.call_args.kwargs
+        assert kwargs["backend"] == "yahoo,brave"
+        assert kwargs["limit"] == 3
+        assert mock_search.call_args.args[0] == "python"
+
+    def test_session_search_without_backend_uses_default_chain(self):
+        with patch("emb.search.search", return_value=_search_results()) as mock_search:
+            runner.invoke(app, [], input="search python\nquit\n")
+
+        assert mock_search.call_args.kwargs["backend"] is None
+
+    def test_session_search_unknown_backend_is_a_clear_error(self):
+        result = runner.invoke(app, [], input="search python --backend bing\nquit\n")
+
+        assert result.exit_code == 0
+        assert "Unknown search backend" in result.output
+        assert "Traceback" not in result.output
+
+    def test_session_help_lists_search_backend(self):
+        result = runner.invoke(app, [], input="help\nquit\n")
+
+        assert "--backend yahoo" in result.output
 
     def test_session_url_dependency_error_stays_human(self):
         with patch("emb.scrape._TRAFILATURA_IMPORT_ERROR", ImportError("lxml.html.clean module requires lxml_html_clean")), \

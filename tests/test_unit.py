@@ -794,6 +794,158 @@ class TestExtract:
         assert "llm" in result["error"].lower() or "failed" in result["error"].lower()
 
 
+# search
+
+def _fake_ddgs(behaviour: dict):
+    # behaviour: engine name -> list of result dicts, or an Exception to raise.
+    calls: list[dict] = []
+
+    class FakeDDGS:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def text(self, query, **kwargs):
+            calls.append(kwargs)
+            outcome = behaviour[kwargs["backend"]]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    return FakeDDGS, calls
+
+
+_HIT = [{"href": "https://a.test/", "title": "A", "body": "about a"}]
+
+
+class TestSearch:
+    def _run(self, behaviour, **kwargs):
+        from emb.search import search
+
+        fake, calls = _fake_ddgs(behaviour)
+        with patch("emb.search.DDGS", fake):
+            return search("q", **kwargs), calls
+
+    def test_falls_through_failing_engines_to_a_working_one(self):
+        behaviour = {
+            "duckduckgo": RuntimeError("No results found."),
+            "brave": ConnectionError("429"),
+            "startpage": _HIT,
+        }
+        results, calls = self._run(behaviour)
+
+        assert [r.url for r in results] == ["https://a.test/"]
+        assert [c["backend"] for c in calls] == ["duckduckgo", "brave", "startpage"]
+
+    def test_stops_at_first_engine_with_results(self):
+        results, calls = self._run({"duckduckgo": _HIT})
+        assert len(results) == 1
+        assert [c["backend"] for c in calls] == ["duckduckgo"]
+
+    def test_default_chain_excludes_wikipedia_and_grokipedia(self):
+        from emb.search import DEFAULT_BACKENDS
+
+        assert "wikipedia" not in DEFAULT_BACKENDS
+        assert "grokipedia" not in DEFAULT_BACKENDS
+
+    def test_all_failing_error_names_every_engine_and_reason(self):
+        behaviour = {
+            "duckduckgo": RuntimeError("No results found."),
+            "brave": RuntimeError("DNSError: error resolving DNS"),
+            "startpage": RuntimeError("ConnectError('error sending request for url (https://x) > tls eof')"),
+            "yahoo": RuntimeError("boom [Errno 13] denied"),
+            "mojeek": [],
+        }
+        with pytest.raises(RuntimeError) as exc_info:
+            self._run(behaviour)
+
+        msg = str(exc_info.value)
+        assert msg.startswith("Search failed on all engines")
+        assert "duckduckgo: no results (blocked or rate-limited)" in msg
+        assert "brave: DNS lookup failed" in msg
+        assert "startpage: connection failed" in msg
+        assert "mojeek: no results" in msg
+        # Square brackets would be parsed as Rich markup by the CLI.
+        assert "[" not in msg and "]" not in msg
+
+    def test_short_error_maps_known_failures_and_truncates(self):
+        from emb.search import _short_error
+
+        assert _short_error(RuntimeError("request timed out")) == "timed out"
+        assert _short_error(RuntimeError("")) == "RuntimeError"
+        long = _short_error(RuntimeError("x" * 500))
+        assert len(long) <= 90 and long.endswith("…")
+
+    def test_unknown_backend_raises_clear_error(self):
+        from emb.search import search
+
+        with pytest.raises(ValueError) as exc_info:
+            search("q", backend="bing")
+
+        assert "'bing'" in str(exc_info.value)
+        assert "yahoo" in str(exc_info.value)
+
+    def test_empty_backend_raises(self):
+        from emb.search import search
+
+        with pytest.raises(ValueError, match="empty"):
+            search("q", backend=" , ")
+
+    def test_backend_string_is_normalised_and_ordered(self):
+        results, calls = self._run(
+            {"yahoo": RuntimeError("x"), "brave": _HIT}, backend=" Yahoo, brave ,yahoo"
+        )
+
+        assert len(results) == 1
+        assert [c["backend"] for c in calls] == ["yahoo", "brave"]
+
+    def test_backend_accepts_a_list(self):
+        results, calls = self._run({"mojeek": _HIT}, backend=["mojeek"])
+        assert [c["backend"] for c in calls] == ["mojeek"]
+
+    def test_auto_is_still_allowed(self):
+        results, calls = self._run({"auto": _HIT}, backend="auto")
+        assert [c["backend"] for c in calls] == ["auto"]
+
+    def test_default_skips_engines_ddgs_no_longer_ships(self):
+        with patch("emb.search.available_backends", return_value=["yahoo", "wikipedia"]):
+            results, calls = self._run({"yahoo": _HIT})
+
+        assert [c["backend"] for c in calls] == ["yahoo"]
+
+    def test_default_falls_back_to_auto_when_no_default_engine_exists(self):
+        with patch("emb.search.available_backends", return_value=["other"]):
+            results, calls = self._run({"auto": _HIT})
+
+        assert [c["backend"] for c in calls] == ["auto"]
+
+    def test_wikipedia_gets_a_valid_region(self):
+        # "wt-wt" would make ddgs request wt.wikipedia.org, which does not exist.
+        results, calls = self._run({"wikipedia": _HIT}, backend="wikipedia")
+        assert calls[0]["region"] == "us-en"
+
+    def test_other_engines_keep_the_requested_region(self):
+        results, calls = self._run({"yahoo": _HIT}, backend="yahoo")
+        assert calls[0]["region"] == "wt-wt"
+
+    def test_results_without_href_are_dropped(self):
+        # A hit with no link is useless, so the chain treats it as empty and moves on.
+        behaviour = {"duckduckgo": [{"title": "no link"}], "brave": _HIT}
+        results, calls = self._run(behaviour)
+
+        assert [r.url for r in results] == ["https://a.test/"]
+        assert [c["backend"] for c in calls] == ["duckduckgo", "brave"]
+
+    def test_limit_is_passed_to_the_engine(self):
+        results, calls = self._run({"duckduckgo": _HIT}, limit=7)
+        assert calls[0]["max_results"] == 7
+
+
 # _browser.ensure
 
 class TestBrowserEnsure:

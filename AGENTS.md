@@ -49,7 +49,7 @@ All tests must pass before committing.
 emb/
 ├── scrape.py           # URL → markdown (trafilatura first, Lightpanda fallback)
 ├── crawl.py            # BFS website crawler with sitemap support
-├── search.py           # Web search via DuckDuckGo (no API key)
+├── search.py           # Web search via ddgs, one engine at a time (no API key)
 ├── map.py              # URL discovery via sitemaps + page links
 ├── interact.py         # Browser interaction via Lightpanda + LLM provider
 ├── agent.py            # LLM-powered structured extraction
@@ -87,6 +87,7 @@ tests/
 - **Single fetch per page**: `crawl.py` fetches HTML once and reuses it for both content extraction and link discovery.
 - **SSRF protection**: `_url_validator.py` blocks RFC 1918, loopback, and link-local ranges before any outbound request in the API layer.
 - **Optional REST auth**: `EMBER_API_KEY` enables `X-API-Key` header auth. No auth overhead if the env var is not set.
+- **Per-engine search chain**: `search()` calls ddgs one backend at a time (`DEFAULT_BACKENDS` order) and returns the first engine with results. ddgs `auto` mode runs wikipedia and grokipedia first, and the wikipedia engine builds its host from the region (`wt-wt` gives `wt.wikipedia.org`, which does not exist), so both are opt-in via `backend=`. When every engine fails, the error names each engine and its reason on one line. An unknown backend raises `ValueError`, because ddgs silently treats it as `auto`. Engines get rate-limited on shared IPs, so tests mock ddgs and the live search tests skip when nothing answers.
 - **Lazy auto-download**: The Lightpanda binary downloads on first use, verified with SHA-256, then cached. No user action required.
 - **Session-first CLI**: `ember` with no arguments launches the interactive REPL (`session()`). One-shot commands still work directly (`ember url ...`). Startup shows a short quick start, and `help` shows the full guide.
 - **Persistent save config**: `ember config --save-dir <path>` writes to `~/.config/ember/config.json`. `EMBER_SAVE_DIR` env var overrides it for the current shell. When neither is set, CLI results default to `./ember_results`. All commands use `_resolve_save()` to apply the right path with explicit `-o` taking highest priority.

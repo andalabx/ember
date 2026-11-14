@@ -254,6 +254,7 @@ def _panel(body: str, title: str = "", subtitle: str = "") -> Panel:
 _SESSION_BROWSE: list[tuple[str, str]] = [
     ("url example.com", "scrape one page"),
     ("search openai api", "search the web"),
+    ("search openai api --backend yahoo", "pick the search engine(s)"),
     ("crawl example.com", "scrape a whole site"),
     ("map example.com", "list site URLs"),
     ("batch urls.txt", "scrape URLs from a file"),
@@ -578,13 +579,16 @@ def cmd_url(
 def search(
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(5, "--limit", "-n", help="Max results"),
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Search engine(s), comma-separated, tried in order (e.g. yahoo,brave)"
+    ),
     save: Optional[str] = typer.Option(None, "--save", "-o", help="Save to .json or .txt"),
 ):
     from emb.search import search as _search
 
     try:
         results = _run_with_steps(
-            lambda: _search(query, limit=limit),
+            lambda: _search(query, limit=limit, backend=backend),
             [
                 f"Searching for {query!r}",
                 "Finding sources...",
@@ -592,8 +596,11 @@ def search(
                 "Putting it together...",
             ],
         )
+    except ValueError as e:
+        _err(str(e))
+        raise typer.Exit(1)
     except Exception as e:
-        _err(str(e), "check your internet connection")
+        _err(str(e), "check your internet connection, or pick engines with --backend")
         raise typer.Exit(1)
 
     if not results:
@@ -929,6 +936,7 @@ _FLAG_ALIASES: dict[str, str] = {
     "-m": "model", "--model": "model",
     "-t": "t", "--timeout": "t",
     "--provider": "provider",
+    "--backend": "backend",
 }
 
 
@@ -1119,13 +1127,13 @@ def _session_run(line: str, state: dict) -> dict:
     # Search
     if cmd == "search":
         if not rest:
-            _err("Usage: search <query> [-n 5] [-o file]"); return state
+            _err("Usage: search <query> [-n 5] [--backend yahoo,brave] [-o file]"); return state
         pos, flags = _parse_flags(rest)
         query = " ".join(pos)
         from emb.search import search as _search
         try:
             results = _run_with_steps(
-                lambda: _search(query, limit=int(flags.get("n", 5))),
+                lambda: _search(query, limit=int(flags.get("n", 5)), backend=flags.get("backend")),
                 [
                     f"Searching for {query!r}",
                     "Finding sources...",
