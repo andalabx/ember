@@ -868,6 +868,91 @@ class TestBrowserEnsure:
             # WSL should not appear on non-Windows platforms.
             assert "wsl" not in str(exc_info.value).lower()
 
+    # Unwritable cache dir must surface as RuntimeError, not a raw OSError.
+    def _linux_unwritable_cache(self, tmp_path):
+        blocker = tmp_path / "blocker"
+        blocker.write_text("x")
+        bad_cache = blocker / "ember"
+        return [
+            patch("emb._browser.CACHE_DIR", bad_cache),
+            patch("emb._browser.BINARY_PATH", bad_cache / "lightpanda"),
+            patch("emb._browser.platform.system", return_value="Linux"),
+            patch("emb._browser.platform.machine", return_value="x86_64"),
+            patch("emb._browser._path_binary", return_value=None),
+        ]
+
+    def test_unwritable_cache_dir_raises_runtime_error(self, tmp_path):
+        from contextlib import ExitStack
+        from emb import _browser
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict("os.environ", {}, clear=False))
+            import os
+            os.environ.pop("EMBER_LIGHTPANDA_PATH", None)
+            for p in self._linux_unwritable_cache(tmp_path):
+                stack.enter_context(p)
+            with pytest.raises(RuntimeError, match="cache directory"):
+                _browser.ensure()
+
+    def test_scrape_url_unwritable_cache_returns_failed_result(self, tmp_path):
+        from contextlib import ExitStack
+        from emb.scrape import scrape_url
+        from emb.types import ScrapeResult
+
+        tier1_fail = ScrapeResult(url="https://example.com", success=False, error="fetch: boom")
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict("os.environ", {}, clear=False))
+            import os
+            os.environ.pop("EMBER_LIGHTPANDA_PATH", None)
+            for p in self._linux_unwritable_cache(tmp_path):
+                stack.enter_context(p)
+            stack.enter_context(patch("emb.scrape._scrape_trafilatura", return_value=tier1_fail))
+            result = scrape_url("https://example.com")
+
+        assert result.success is False
+        assert result.error
+
+    def test_interact_unwritable_cache_returns_failed_result(self, tmp_path):
+        from contextlib import ExitStack
+        from emb.interact import interact
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict("os.environ", {}, clear=False))
+            import os
+            os.environ.pop("EMBER_LIGHTPANDA_PATH", None)
+            for p in self._linux_unwritable_cache(tmp_path):
+                stack.enter_context(p)
+            result = interact("https://example.com", prompt="hi", provider="ollama",
+                              api_key="", use_browser=True)
+
+        assert result.success is False
+        assert "cache directory" in result.error
+
+    def test_unrunnable_cached_binary_is_treated_as_unavailable(self, tmp_path):
+        from emb import _browser
+
+        fake = tmp_path / "lightpanda"
+        fake.write_bytes(b"not a binary")
+
+        # Exec-format and permission errors are OSErrors, not FileNotFoundError.
+        with patch.object(_browser, "BINARY_PATH", fake), \
+             patch("emb._browser._path_binary", return_value=None), \
+             patch("emb._browser._env_path", return_value=None), \
+             patch("emb._browser.subprocess.run", side_effect=PermissionError("denied")):
+            assert _browser.is_available() is False
+            assert _browser.status()["available"] is False
+
+    def test_unremovable_broken_binary_does_not_raise(self, tmp_path):
+        from emb import _browser
+
+        fake = tmp_path / "lightpanda"
+        fake.write_bytes(b"x")
+
+        with patch.object(_browser, "BINARY_PATH", fake), \
+             patch("emb._browser.subprocess.run", side_effect=OSError("bad exe")), \
+             patch.object(type(fake), "unlink", side_effect=PermissionError("read-only")):
+            assert _browser._cached_binary() is None
+
 
 # _browser.is_available
 

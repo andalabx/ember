@@ -109,7 +109,7 @@ def _env_path() -> str | None:
             r = subprocess.run([env_path, "version"], capture_output=True, text=True, timeout=5)
             if r.returncode == 0:
                 return env_path
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pass
 
     raise RuntimeError(
@@ -123,7 +123,7 @@ def _path_binary() -> str | None:
         r = subprocess.run(["lightpanda", "version"], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
             return "lightpanda"
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
     return None
 
@@ -135,9 +135,13 @@ def _cached_binary() -> str | None:
         r = subprocess.run([str(BINARY_PATH), "version"], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
             return str(BINARY_PATH)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
-    BINARY_PATH.unlink(missing_ok=True)
+    # Drop the broken binary so the next run re-downloads it; a read-only cache is not fatal.
+    try:
+        BINARY_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
     return None
 
 
@@ -245,7 +249,14 @@ def ensure() -> str:
             "See: https://lightpanda.io/docs/open-source/installation"
         )
 
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    # Callers only handle RuntimeError, so filesystem failures must surface as one.
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise RuntimeError(
+            f"Cannot create the ember cache directory {CACHE_DIR}: {e}\n"
+            "Make it writable, or set EMBER_LIGHTPANDA_PATH to an existing Lightpanda binary."
+        ) from e
     tmp = BINARY_PATH.with_suffix(".tmp")
     size_bytes = download_size_bytes()
 
